@@ -4,26 +4,50 @@
 # jabber : svsd_val@jabber.ru
 # mail to: svsdval@gmail.com
 
-# ===========================================================================
-# v2m.py - Video to MIDI converter (single-file legacy layout)
-#
-# This file contains the original monolithic implementation for the
-# video2midi project. It mixes responsibilities (CLI, IO, OpenCV
-# frame handling, OpenGL/pygame UI, and MIDI export). The goal of the
-# following comments and section markers is to make it straightforward to
-# split this file into logical modules (for example: cli.py, io.py,
-# video.py, ui.py, midi.py, and utils.py) without changing runtime
-# behaviour.
-#
-# When refactoring, move one section at a time and preserve function
-# signatures so existing calls keep working. Each section is marked by
-# a visible comment block like this to help identify boundaries.
-# ===========================================================================
-
-
-# --- CLI logic moved to cli.py ---
+import sys
 import os
-from cli import get_video_filepath
+import re
+
+filepath=''
+if ( len(sys.argv) < 2 ):
+  if sys.platform.startswith('win'):
+    from tkinter import Tk
+    from tkinter import filedialog as fd
+    root=Tk()
+    root.withdraw()
+    filepath= fd.askopenfilename(filetypes=(("Video Files", ".mpg .mkv .avi .webm .mp4"),   ("All Files", "*.*")))
+    root.destroy()
+    print("get file [" + filepath +"]")
+  else:
+    print("halt, no args")
+    sys.exit( 0 )
+else:
+  filepath = sys.argv[1]
+
+if not os.path.exists( filepath ):
+  has_pytube = False
+
+  try:
+    from pytube import YouTube
+    has_pytube = True
+  except:
+    pass
+
+  if has_pytube:
+    print("Downloading video by url: %s ..." % filepath)
+    yt = YouTube( filepath )
+    videos = [ { 'itag' : i.itag, 'res' : int(re.sub('[^0-9]','', i.resolution)), 'progressive' : int(i.is_progressive) }  for i in yt.streams.filter(file_extension='mp4') if i.mime_type.find("video") != -1 ]
+    print(videos)
+    videos = sorted( videos , key = lambda d : ( -d['progressive'], - d['res']) )
+    print('sorted by progressive (has video & audio in same file) and video resolution')
+    for i in videos:
+      print('processing: %s' % i)
+      filepath = "%s_%s_%s.mp4" % ( re.sub(r'[\W_]','_', yt.title), i['itag'], i['res'])
+      yt.streams.get_by_itag(i['itag']).download( "./" , filepath, skip_existing=True)
+      break
+  else:
+    print("file not exists [" + filepath +"], and no pytube has installed..., exit.")
+    sys.exit( 0 )
 
 import math
 import ntpath
@@ -32,31 +56,20 @@ from os.path import expanduser
 
 import cv2
 import pygame
+from midiutil.MidiFile import MIDIFile
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from pygame.locals import *
 
-from video_io import VideoHandler
+print(f'open file [{filepath}]')
+vidcap = cv2.VideoCapture( filepath )
 
-from utils import v_rotate, snap_to_grid, framerate, is_black_key, is_white_key
-from ui import drawframe, main_event_loop
-from midi_proc import processmidi, reconstruct
+outputmid= ntpath.basename( filepath ) + '_output.mid'
 
-filepath = get_video_filepath()
-print(f'file opened [{filepath}]')
-
-video = VideoHandler(filepath)
-
-outputmid = ntpath.basename(filepath) + '_output.mid'
-
-settingsfile = filepath + '.ini'
+settingsfile= filepath + '.ini'
 
 import datetime
 
-# ---------------------------------------------------------------------------
-# Project modules: settings, OpenGL UI helpers and midi model
-# When refactoring, move these imports into smaller modules (e.g. ui, midi)
-# ---------------------------------------------------------------------------
 import video2midi.settings as settings
 from video2midi.views.gl import *
 from video2midi.models.midi import *
@@ -74,25 +87,46 @@ lastkeygrabid=-1
 
 frame= 0
 printed_for_frame=0
+convertCvtColor=1
+# For OpenCV 2.X ..
+CAP_PROP_FRAME_COUNT =0
+CAP_PROP_POS_FRAMES  =0
+CAP_PROP_POS_MSEC    =0
+CAP_PROP_FRAME_WIDTH =0
+CAP_PROP_FRAME_HEIGHT=0
+CAP_PROP_FPS         =0
+COLOR_BGR2RGB        =0
+print("OpenCV version:" + cv2.__version__ )
 
-video.vidcap.set(video.CAP_PROP_POS_FRAMES, frame)
-video.vidcap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-success,image = video.vidcap.read()
+if cv2.__version__.startswith('2.'):
+  CAP_PROP_FRAME_COUNT  = cv2.cv.CV_CAP_PROP_FRAME_COUNT
+  CAP_PROP_POS_FRAMES   = cv2.cv.CV_CAP_PROP_POS_FRAMES
+  CAP_PROP_POS_MSEC     = cv2.cv.CV_CAP_PROP_POS_MSEC
+  CAP_PROP_FRAME_WIDTH  = cv2.cv.CV_CAP_PROP_FRAME_WIDTH
+  CAP_PROP_FRAME_HEIGHT = cv2.cv.CV_CAP_PROP_FRAME_HEIGHT
+  CAP_PROP_FPS          = cv2.cv.CV_CAP_PROP_FPS
+else:
+  # 3, 4 , etc ...
+  CAP_PROP_FRAME_COUNT  = cv2.CAP_PROP_FRAME_COUNT
+  CAP_PROP_POS_FRAMES   = cv2.CAP_PROP_POS_FRAMES
+  CAP_PROP_POS_MSEC     = cv2.CAP_PROP_POS_MSEC
+  CAP_PROP_FRAME_WIDTH  = cv2.CAP_PROP_FRAME_WIDTH
+  CAP_PROP_FRAME_HEIGHT = cv2.CAP_PROP_FRAME_HEIGHT
+  CAP_PROP_FPS          = cv2.CAP_PROP_FPS
 
-# ---------------------------------------------------------------------------
-# Video capture state
-# - 'vidcap' is the OpenCV VideoCapture instance used throughout the app.
-# - width/height/fps/length store video metadata used by UI and processing.
-# ---------------------------------------------------------------------------
+COLOR_BGR2RGB         = cv2.COLOR_BGR2RGB
+
+vidcap.set(CAP_PROP_POS_FRAMES, frame)
+vidcap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+success,image = vidcap.read()
 
 debug_keys = 0
 
+length = int(vidcap.get(CAP_PROP_FRAME_COUNT))
+video_width  = int(vidcap.get(CAP_PROP_FRAME_WIDTH))
+video_height = int(vidcap.get(CAP_PROP_FRAME_HEIGHT))
+fps    = float(vidcap.get(CAP_PROP_FPS))
 
-# Use video handler metadata
-length = video.length
-video_width = video.video_width
-video_height = video.video_height
-fps = video.fps
 width = video_width
 height = video_height
 
@@ -114,12 +148,6 @@ fit_to_the_screen()
 endframe = length
 showoutputpath = 0
 
-# ---------------------------------------------------------------------------
-# Pygame + OpenGL initialization and window management
-# - The code below creates the display, handles resizing and sets up OpenGL
-#   textures. This should be grouped into an 'ui' module during refactor.
-# ---------------------------------------------------------------------------
-
 
 def resize_window() -> None:
   global screen, width, height
@@ -136,14 +164,42 @@ def resize_window() -> None:
   doinit()
 
 # set start frame
+def getFrame(framenum:int = -1) -> None:
+  global image
+  global success
+  global width
+  global height
+  global convertCvtColor
+  global fps
 
-# Use video handler for frame access
-def getFrame(framenum: int = -1) -> None:
-    video.getFrame(framenum)
-    global image
-    global success
-    image = video.image
-    success = video.success
+
+  if ( fps == 0 ):
+    return
+  goto_frame_by_msec=False
+
+  if ( framenum != -1 ):
+    #vidcap.set(CAP_PROP_POS_FRAMES, int(framenum) )
+    # problems with mpeg formats ...
+    if goto_frame_by_msec:
+      oldframenum = int(round(vidcap.get(1)))
+      frametime =  framenum * 1000.0 / fps
+      print("go to frame time :" + str(frametime))
+      success = vidcap.set(CAP_PROP_POS_MSEC, frametime)
+      if not success:
+        print("Cannot set frame position from video file at " + str(framenum))
+        success = vidcap.set(CAP_PROP_POS_FRAMES, int(oldframenum) )
+    else:
+      success = vidcap.set(CAP_PROP_POS_FRAMES, framenum )
+
+    curframe = vidcap.get(CAP_PROP_POS_FRAMES)
+    if (curframe != framenum ):
+      print("OpenCV bug, Requesting frame " + str(framenum) + " but get position on " +str(curframe))
+
+
+  success,image = vidcap.read()
+#  if ( resize == 1 ):
+#    image = cv2.resize(image, (resize_width , resize_height))
+#    print "resize to "+str(resize_width) + "x"+ str(resize_height)
 
 getFrame()
 
@@ -156,6 +212,7 @@ channel = 0
 volume = 100
 basenote = prefs.octave * 12
 
+
 notes=[]
 notes_db=[]
 notes_de=[]
@@ -166,7 +223,11 @@ notes_pressed_color=[]
 colorWindow_colorBtns_channel_labels=[]
 colorWindow_colorBtns_channel_btns=[]
 
+
+
 separate_note_id=-1
+
+
 
 screen=0
 colorBtns = []
@@ -187,13 +248,6 @@ if os.path.exists( 'v2m.ini' ):
   inifile="v2m.ini"
   print("local config file exists.")
 
-# ---------------------------------------------------------------------------
-# Application state and configuration variables
-# - lists like notes, notes_db, notes_channel hold the current state while
-#   scanning frames and are closely tied to MIDI generation.
-# - prefs is a module-level config object imported from video2midi.prefs
-# ---------------------------------------------------------------------------
-
 def update_size() -> None:
   global width, height
   if ( prefs.resize == 1 ):
@@ -212,7 +266,7 @@ def loadsettings(cfgfile: str) -> None:
    for i in range(len(colorBtns)):
      colorWindow_colorBtns_channel_labels[i].text = "Ch:" + str(prefs.keyp_colors_channel[i]+1)
 
-  update_size()
+  update_size
 
   if 'glwindows' in globals():
     glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
@@ -232,7 +286,7 @@ def loadsettings(cfgfile: str) -> None:
 
 
 
-update_size()
+update_size
 
 for i in range(144):
   notes.append(0)
@@ -245,68 +299,114 @@ for i in range(144):
   prefs.keyp_colors_alternate.append([0,0,0])
   prefs.keyp_colors_alternate_sensitivity.append(0)
 
-def updatekeys(append=False):
-    xx = 0
-    if append:
-        print(f'clear keys, set to {prefs.keys_pos_cnt}')
-        prefs.keys_pos = []
 
-    for idx in range(prefs.keys_pos_cnt):
-        i = idx // 12
-        j = idx % 12
-        if (append) or (i * 12 + j > len(prefs.keys_pos) - 1):
-            prefs.keys_pos.append([0, 0])
-        prefs.keys_pos[i * 12 + j][0] = int(round(xx))
-        prefs.keys_pos[i * 12 + j][1] = 0
-        if (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10):
-            prefs.keys_pos[i * 12 + j][1] = prefs.yoffset_blackkeys
-            xx += -prefs.whitekey_width
-        if (j == 1) or (j == 6):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * prefs.blackkey_relative_position))
-        if (j == 8):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * 0.5))
-        if (j == 3) or (j == 10):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
-        xx += prefs.whitekey_width
-    for i in range(len(prefs.keys_pos)):
-        prefs.keys_pos[i] = v_rotate(prefs.keys_pos[i], prefs.keys_angle)
-        prefs.keys_pos[i][0] = -prefs.keys_pos[i][0]
 
-updatekeys(True)
+
+def v_rotate(v, ang):
+  radAng = ang * math.pi/180
+  return [ (v[1] * math.cos(radAng)) - (v[0] * math.sin(radAng)), (v[1] * math.sin(radAng)) + (v[0] * math.cos(radAng)) ]
+
+def updatekeys( append=0 ):
+ xx=0
+ if append == 1:
+  print(f'clear keys, set to {prefs.keys_pos_cnt}')
+  prefs.keys_pos = []
+   
+ for idx in range (prefs.keys_pos_cnt):
+   i = idx // 12
+   j = idx % 12
+#  for i in range(12):
+#   for j in range(12):
+   if (append == 1) or (i*12+j > len(prefs.keys_pos)-1):
+    prefs.keys_pos.append( [0,0] )
+
+   prefs.keys_pos[i*12+j][0] = int(round( xx ))
+   prefs.keys_pos[i*12+j][1] = 0
+   if (j == 1) or ( j ==3 ) or ( j == 6 ) or ( j == 8) or ( j == 10 ):
+     prefs.keys_pos[i*12+j][1] = prefs.yoffset_blackkeys
+     xx += -prefs.whitekey_width
+#     keys_pos[i*12+j][0] = int(round( xx  + whitekey_width *0.5 ))
+   # tune by wuzhuoqing
+   if (j == 1) or ( j == 6 ):
+     prefs.keys_pos[i*12+j][0] = int(round( xx  + prefs.whitekey_width * prefs.blackkey_relative_position ))
+   if (j == 8 ):
+     prefs.keys_pos[i*12+j][0] = int(round( xx  + prefs.whitekey_width * 0.5 ))
+   if ( j ==3 ) or ( j == 10 ):
+     prefs.keys_pos[i*12+j][0] = int(round( xx  + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position) ))
+
+   xx += prefs.whitekey_width
+ for i in range(len(prefs.keys_pos)):
+   prefs.keys_pos[i] = v_rotate( prefs.keys_pos[i] , prefs.keys_angle )
+   prefs.keys_pos[i][0] = - prefs.keys_pos[i][0]
+
+
+
+
+updatekeys( 1 )
 
 loadsettings(inifile)
 
 tStart = t0 = time.time()-1
 frames = 0
 
-# Use video handler for image loading
+def snap_to_grid( input_value , input_grid_size ):
+    quantized = int( (input_value - int(input_value)) * input_grid_size ) / input_grid_size
+    result = (quantized + int(input_value))
+    #print ("value before:", input_value , " after :", result)
+    return result
+
+
+
+def framerate():
+    global t0, frames
+    t = time.time()
+    frames += 1
+    if t - t0 >= 1.0:
+        seconds = t - t0
+        if ( seconds != 0) :
+          fps = frames / seconds
+          print("%.0f frames in %3.1f seconds = %6.3f FPS" % (frames,seconds,fps))
+        t0 = t
+        frames = 0
+
+
 def loadImage(idframe=130):
-    global image
-    if running != 0:
-        video.getFrame(idframe)
-        image = video.image
-    print(f"load image from video {width}x{height} frame: {idframe}")
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
-    error_on_load = False
+  global image
+  global convertCvtColor
+  if running != 0:
+    getFrame(idframe)
+  #image2=cv2.resize(image, (int(video_width/4) , int(video_height/4)))
+
+  print("load image from video " + str(width) + "x" + str(height) + " frame: "+ str(idframe))
+  glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+  error_on_load=False
+  try:
+    if ( convertCvtColor == 1 ):
+      #print ("Loading RGB texture")
+      glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_RGB, GL_UNSIGNED_BYTE, cv2.cvtColor(image,COLOR_BGR2RGB) )
+    else:
+      #print ("Loading BGR texture")
+      glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_BGR, GL_UNSIGNED_BYTE, image )
+    return
+  except Exception as E:
+     error_on_load=True
+     print("Can't load image from video to OpenGL: %s" % E);
+
+  if error_on_load:
+    rvideo_width, rvideo_height = 512, 512
+    print("Trying resize video image to %sx%s" % (rvideo_width, rvideo_height));
     try:
-        rgb_image = video.loadImage(idframe)
-        glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
-        return
+       rimage = cv2.resize(image  , (rvideo_width, rvideo_height))
+       if ( convertCvtColor == 1 ):
+         glTexImage2D(GL_TEXTURE_2D, 0, 3, rvideo_width, rvideo_height, 0, GL_RGB, GL_UNSIGNED_BYTE, cv2.cvtColor(rimage,COLOR_BGR2RGB) )
+       else:
+         glTexImage2D(GL_TEXTURE_2D, 0, 3, rvideo_width, rvideo_height, 0, GL_BGR, GL_UNSIGNED_BYTE, rimage )
     except Exception as E:
-        error_on_load = True
-        print(f"Can't load image from video to OpenGL: {E}")
-    if error_on_load:
-        rvideo_width, rvideo_height = 512, 512
-        print(f"Trying resize video image to {rvideo_width}x{rvideo_height}")
-        try:
-            rimage = cv2.resize(image, (rvideo_width, rvideo_height))
-            rgb_image = cv2.cvtColor(rimage, video.COLOR_BGR2RGB)
-            glTexImage2D(GL_TEXTURE_2D, 0, 3, rvideo_width, rvideo_height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
-        except Exception as E:
-            print(f"Can't load image from video to OpenGL: {E}")
+      print("Can't load image from video to OpenGL: %s" % E);
 
 def update_channels(sender):
    print( 'update_channels...' +str(sender.index))
@@ -457,7 +557,7 @@ def start_recreate_midi(sender):
 
 def set_start_frame_to_current_frame(sender):
   if sender.index == 0:
-    prefs.startframe = int(round(video.vidcap.get(1)))
+    prefs.startframe = int(round(vidcap.get(1)))
   else:
     prefs.startframe = 0
   print("set start frame = "+ str(prefs.startframe))
@@ -465,7 +565,7 @@ def set_start_frame_to_current_frame(sender):
 def sef_end_frame_to_current_frame(sender):
   global endframe
   if sender.index == 0:
-    endframe = int(round(video.vidcap.get(1)))
+    endframe = int(round(vidcap.get(1)))
   else:
     endframe = length
   print("set end frame = "+ str(endframe), sender.index)
@@ -553,9 +653,11 @@ def update_keys_pos_cnt(sender,value):
   
 def change_cnt(sender):
   print('change count')
-  updatekeys(True)
+  updatekeys(1)
 
-
+def is_black_key(key_id : int) -> bool:
+  j = key_id % 12
+  return (j == 1) or ( j == 3 ) or ( j == 6 ) or ( j == 8) or ( j == 10 )
 
 
 def vertical_align_keys( separate_black_keys = 1, align = 1 ):
@@ -649,14 +751,6 @@ settingsWindow.appendChild( exit_switch )
 
 settingsWindow.appendChild( GLButton(260    , 140 ,140,20,0, [128,128,128], "save settings"                  , btndown_save_settings  , hint = "F2 - hot key, save current settings" ) )
 settingsWindow.appendChild( GLButton(260+141, 140 ,140,20,0, [128,128,128], "load settings"                  , btndown_load_settings  , hint = "F3 - hot key, load saved settings" ) )
-
-# ---------------------------------------------------------------------------
-# UI widgets and windows
-# - This section builds GLWindow/GLButton/GLSlider instances and binds
-#   callbacks. When splitting modules, these constructors and callback
-#   registrations belong in a 'ui' package (views.gl currently contains
-#   the widget classes used here).
-# ---------------------------------------------------------------------------
 
 navbtns_info = [
              {'name' : "[<", 'hint' : 'Home - hot key, go to first frame',
@@ -819,6 +913,12 @@ def getkeyp_pixel_pos( x:int, y:int ) -> list[int]:
     if ( pixy > video_height-1 ): pixy= video_height-1
   return [pixx,pixy]
 
+def iswhitekey( key_num: int ) -> int:
+  j = key_num % 12
+  if (j == 1) or ( j ==3 ) or ( j == 6 ) or ( j == 8) or ( j == 10 ):
+    return 1
+  return 0
+
 def drawframe( lastimage = None):
  global pyfont
  global helptext
@@ -934,12 +1034,12 @@ def drawframe( lastimage = None):
  if prefs.rollcheck:
   for i in range(1, len( prefs.keys_pos) -1 ):
       if prefs.rollcheck_priority == 0:
-        if not is_white_key(i):
+        if not iswhitekey(i):
         # Priority on Black keys
           if notes_tmp[i+1] >0: notes_tmp[i] = 0
           if notes_tmp[i-1] >0: notes_tmp[i] = 0
       else:
-        if is_white_key(i):
+        if iswhitekey(i):
         # Priority on White keys
           if notes_tmp[i+1] >0: notes_tmp[i] = 0
           if notes_tmp[i-1] >0: notes_tmp[i] = 0
@@ -952,7 +1052,7 @@ def drawframe( lastimage = None):
   glTranslatef(prefs.keys_pos[i][0],prefs.keys_pos[i][1],0)
 
   glColor4f(1,1,1,0.5)
-  if is_white_key(i):
+  if iswhitekey(i):
     glColor4f(0.57,0.57,0.57,0.55)
   DrawQuad(-0.5,-line_height,0.5, line_height )
   if ( keypressed != 0 ):
@@ -1189,12 +1289,12 @@ def processmidi():
     for i in range(1, len( prefs.keys_pos)-1 ):
       if notes[ i ] != 0:
         if prefs.rollcheck_priority == 0:
-          if not is_white_key(i):
+          if not iswhitekey(i):
           # Priority on Black keys
             if notes[i+1] >0 and notes_tmp[i] >0: notes[i] = 0
             if notes[i-1] >0 and notes_tmp[i] >0: notes[i] = 0
         else:
-          if is_white_key(i):
+          if iswhitekey(i):
           # Priority on White keys
             if notes[i+1] >0 and notes_tmp[i] >0: notes[i] = 0
             if notes[i-1] >0 and notes_tmp[i] >0: notes[i] = 0
@@ -1367,7 +1467,7 @@ def main():
   clock = pygame.time.Clock()
 
   # set start frame
-  video.vidcap.set(video.CAP_PROP_POS_FRAMES, frame)
+  vidcap.set(CAP_PROP_POS_FRAMES, frame)
 
 
   while running==1:
@@ -1436,8 +1536,8 @@ def main():
         for i in range(len(glwindows)):
 #          if isinstance(glwindows[i],GLButton):
 #             continue
-          glwindows[i].x = mousex
-          glwindows[i].y = mousey
+          glwindows[i].x = mousex;
+          glwindows[i].y = mousey;
 
 
       if event.key == pygame.K_r:

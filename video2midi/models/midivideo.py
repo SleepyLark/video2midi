@@ -21,7 +21,8 @@ class MIDIVideo:
     video_width = 0
     video_height = 0
     fps = 0
-    success,image = False
+    success = False
+    image = False
 
     debug_keys = 0
 
