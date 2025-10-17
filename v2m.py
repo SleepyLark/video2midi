@@ -71,8 +71,8 @@ settingsfile= filepath + '.ini'
 import datetime
 
 import video2midi.settings as settings
-from video2midi.gl import *
-from video2midi.midi import *
+from video2midi.views.gl import *
+from video2midi.models.midi import *
 from video2midi.prefs import prefs
 
 width=640
