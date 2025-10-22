@@ -37,9 +37,8 @@ from OpenGL.GLU import *
 from pygame.locals import *
 
 from video_io import VideoHandler
-
 from utils import v_rotate, snap_to_grid, framerate, is_black_key, is_white_key
-from ui import drawframe, main_event_loop
+from ui import MainWindow
 from midi_proc import processmidi, reconstruct
 
 filepath = get_video_filepath()
@@ -62,56 +61,20 @@ from video2midi.views.gl import *
 from video2midi.models.midi import *
 from video2midi.prefs import prefs
 
-width=640
-height=480
 
-mpos = [0,0]
-
-keygrab=0
-keygrabid=-1
-lastkeygrabid=-1
-
-
-frame= 0
-printed_for_frame=0
-
-video.vidcap.set(video.CAP_PROP_POS_FRAMES, frame)
-video.vidcap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-success,image = video.vidcap.read()
 
 # ---------------------------------------------------------------------------
 # Video capture state
 # - 'vidcap' is the OpenCV VideoCapture instance used throughout the app.
 # - width/height/fps/length store video metadata used by UI and processing.
 # ---------------------------------------------------------------------------
-
-debug_keys = 0
+print("video " + str(video.video_width) + "x" + str(video.video_height) +" fps: " + str(video.fps))
+debug_keys = False
 
 
 # Use video handler metadata
-length = video.length
-video_width = video.video_width
-video_height = video.video_height
-fps = video.fps
-width = video_width
-height = video_height
 
-def fit_to_the_screen() -> None:
-  global width, height
-  infoObject = pygame.display.Info()
-  if (width > infoObject.current_w) or ( height > infoObject.current_h):
-    print("try fit window to the screen")
-    print("current window size: %sx%s" %(width,height))
-    print("current screen size: %sx%s" %(infoObject.current_w, infoObject.current_h))
-    ratio  = ( width / infoObject.current_w)
-    width = int(width / ratio * 0.9 )
-    height = int(height / ratio *0.9)
-    print("new window size: %sx%s" %(width,height))
-
-pygame.init()
-fit_to_the_screen()
-
-endframe = length
+endframe = video.length # End frame for midi (default is end of video)
 showoutputpath = 0
 
 # ---------------------------------------------------------------------------
@@ -120,36 +83,16 @@ showoutputpath = 0
 #   textures. This should be grouped into an 'ui' module during refactor.
 # ---------------------------------------------------------------------------
 
+appView = MainWindow(video.video_width, video.video_height)
+appView.loadImage(video.loadImage()) # set starting image
 
-def resize_window() -> None:
-  global screen, width, height
-
-  if prefs.resize:
-    width = prefs.resize_width
-    height = prefs.resize_height
-  else:
-    width = video_width
-    height = video_height
-    fit_to_the_screen()
-  screen = pygame.display.set_mode((width,height), DOUBLEBUF|OPENGL|pygame.RESIZABLE)
-
-  doinit()
-
-# set start frame
-
-# Use video handler for frame access
-def getFrame(framenum: int = -1) -> None:
-    video.getFrame(framenum)
-    global image
-    global success
-    image = video.image
-    success = video.success
-
-getFrame()
+appView.fit_to_the_screen()
 
 
-
-print("video " + str(width) + "x" + str(height) +" fps: " + str(fps))
+keygrab=0
+keygrabid=-1
+lastkeygrabid=-1
+printed_for_frame=0
 
 # add some notes
 channel = 0
@@ -168,7 +111,7 @@ colorWindow_colorBtns_channel_btns=[]
 
 separate_note_id=-1
 
-screen=0
+appView.screen=0
 colorBtns = []
 
 #quantized notes to the grid.
@@ -178,7 +121,7 @@ notes_grid_size=32
 midi_file_format = 0
 
 line_height = 20
-running = 1
+running = True
 
 #cfg
 home = expanduser("~")
@@ -194,13 +137,6 @@ if os.path.exists( 'v2m.ini' ):
 # - prefs is a module-level config object imported from video2midi.prefs
 # ---------------------------------------------------------------------------
 
-def update_size() -> None:
-  global width, height
-  if ( prefs.resize == 1 ):
-    width = prefs.resize_width
-    height = prefs.resize_height
-  else:
-    fit_to_the_screen()
 
 def loadsettings(cfgfile: str) -> None:
   global colorBtns, colorWindow_colorBtns_channel_labels
@@ -212,11 +148,11 @@ def loadsettings(cfgfile: str) -> None:
    for i in range(len(colorBtns)):
      colorWindow_colorBtns_channel_labels[i].text = "Ch:" + str(prefs.keyp_colors_channel[i]+1)
 
-  update_size()
+  appView.update_size()
 
   if 'glwindows' in globals():
     glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-    loadImage(prefs.startframe)
+    appView.loadImage(video.loadImage(prefs.startframe))
     settingsWindow_slider1.setvalue(prefs.keyp_delta)
     settingsWindow_slider2.setvalue(prefs.minimal_duration * 100)
     settingsWindow_slider3.setvalue(prefs.tempo)
@@ -232,7 +168,7 @@ def loadsettings(cfgfile: str) -> None:
 
 
 
-update_size()
+appView.update_size()
 
 for i in range(144):
   notes.append(0)
@@ -279,35 +215,6 @@ loadsettings(inifile)
 tStart = t0 = time.time()-1
 frames = 0
 
-# Use video handler for image loading
-def loadImage(idframe=130):
-    global image
-    if running != 0:
-        video.getFrame(idframe)
-        image = video.image
-    print(f"load image from video {width}x{height} frame: {idframe}")
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
-    error_on_load = False
-    try:
-        rgb_image = video.loadImage(idframe)
-        glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
-        return
-    except Exception as E:
-        error_on_load = True
-        print(f"Can't load image from video to OpenGL: {E}")
-    if error_on_load:
-        rvideo_width, rvideo_height = 512, 512
-        print(f"Trying resize video image to {rvideo_width}x{rvideo_height}")
-        try:
-            rimage = cv2.resize(image, (rvideo_width, rvideo_height))
-            rgb_image = cv2.cvtColor(rimage, video.COLOR_BGR2RGB)
-            glTexImage2D(GL_TEXTURE_2D, 0, 3, rvideo_width, rvideo_height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
-        except Exception as E:
-            print(f"Can't load image from video to OpenGL: {E}")
-
 def update_channels(sender):
    print( 'update_channels...' +str(sender.index))
    i=abs(sender.index) -1
@@ -332,18 +239,18 @@ def readkeycolor(i):
    pixx=int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
    pixy=int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
 
-   if ( pixx >= width ) or ( pixy >= height ) or ( pixx < 0 ) or ( pixy < 0 ): return
+   if ( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 ): return
    if ( prefs.resize == 1 ):
      pixxo=pixx
      pixyo=pixy
 
-     pixx= int(round( pixx * ( video_width / float(prefs.resize_width) )))
-     pixy= int(round( pixy * ( video_height / float(prefs.resize_height) )))
-     if ( pixx > video_width -1 ): pixx = video_width-1
-     if ( pixy > video_height-1 ): pixy= video_height-1
+     pixx= int(round( pixx * ( video.video_width / float(prefs.resize_width) )))
+     pixy= int(round( pixy * ( video.video_height / float(prefs.resize_height) )))
+     if ( pixx > video.video_width -1 ): pixx = video.video_width-1
+     if ( pixy > video.video_height-1 ): pixy= video.video_height-1
     #      print "original x:"+str(pixxo) + "x" +str(pixyo) + " mapped :" +str(pixx) +"x"+str(pixy)
 
-   keybgr=image[pixy,pixx]
+   keybgr=video.image[pixy,pixx]
    key=[ keybgr[2], keybgr[1],keybgr[0] ]
 
    prefs.keyp_colors_alternate[i] = key
@@ -451,7 +358,7 @@ def showOrhideallwindows(sender):
 def start_recreate_midi(sender):
   global running
   if prefs.autoclose == 1:
-    running = 0
+    running = False
   else:
     reconstruct()
 
@@ -467,7 +374,7 @@ def sef_end_frame_to_current_frame(sender):
   if sender.index == 0:
     endframe = int(round(video.vidcap.get(1)))
   else:
-    endframe = length
+    endframe = video.length
   print("set end frame = "+ str(endframe), sender.index)
 
 def switch_notes_overlap(sender):
@@ -492,17 +399,16 @@ def switch_ignore_notes_with_minimal_duration(sender):
 
 def switch_resize_windows(sender):
   prefs.resize = not prefs.resize
-  resize_window()
+  appView.resize_window()
 
 def scroll_by_steps( steps ):
-  global frame
-  frame+=steps
-  if (frame > length *0.99):
-    frame=math.trunc(length *0.99)
-  if (frame < 1):
-    frame=1
+  video.currentFrame+=steps
+  if (video.currentFrame > video.length *0.99):
+    video.currentFrame=math.trunc(video.length *0.99)
+  if (video.currentFrame < 1):
+    video.currentFrame=1
   glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-  loadImage(frame)
+  appView.loadImage(video.loadImage(video.currentFrame))
 
 def scroll_forward_by_frame(sender):
   scroll_by_steps(1)
@@ -517,16 +423,14 @@ def scroll_fast_prev(sender):
   scroll_by_steps(-100)
 
 def scroll_to_start(sender):
-  global frame
-  frame=0
+  video.currentFrame=0
   glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-  loadImage(frame)
+  appView.loadImage(video.loadImage(video.currentFrame))
 
 def scroll_to_end(sender):
-  global frame
-  frame=length-100
+  video.currentFrame=video.length-100
   glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-  loadImage(frame)
+  appView.loadImage(video.loadImage(video.currentFrame))
 
 def btndown_save_settings(sender):
   settings.savesettings(settingsfile)
@@ -536,7 +440,7 @@ def btndown_load_settings(sender):
   loadsettings( settingsfile )
   update_alternate_label()
   if (prefs.resize != old_resize):
-    resize_window()
+    appView.resize_window()
 
 def change_autoclose(sender):
   prefs.autoclose = sender.switch_status
@@ -808,15 +712,15 @@ def getkeyp_pixel_pos( x:int, y:int ) -> list[int]:
   pixx=int(prefs.xoffset_whitekeys + x)
   pixy=int(prefs.yoffset_whitekeys + y)
 
-  if ( pixx >= width ) or ( pixy >= height ) or ( pixx < 0 ) or ( pixy < 0 ):
+  if ( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 ):
     return [-1,-1]
 
   #if ( prefs.resize == 1 ):
   if 1==1: #disabled
-    pixx= int(round( pixx * ( video_width / float(width) )))
-    pixy= int(round( pixy * ( video_height / float(height) )))
-    if ( pixx > video_width -1 ): pixx = video_width-1
-    if ( pixy > video_height-1 ): pixy= video_height-1
+    pixx= int(round( pixx * ( video.video_width / float(appView.width) )))
+    pixy= int(round( pixy * ( video.video_height / float(appView.height) )))
+    if ( pixx > video.video_width -1 ): pixx = video.video_width-1
+    if ( pixy > video.video_height-1 ): pixy= video.video_height-1
   return [pixx,pixy]
 
 def drawframe( lastimage = None):
@@ -825,25 +729,24 @@ def drawframe( lastimage = None):
  global mousex, mousey
  global keyp_colormap_colors_pos
  global keyp_colormap_pos
- global frame, image
  global printed_for_frame
  global notes_tmp
  global notes_pressed_color
  #global old_spark_color
  #global cur_spark_color
  print_for_frame_debug = False
- if printed_for_frame != frame:
+ if printed_for_frame != video.currentFrame:
   print_for_frame_debug = True
- printed_for_frame = frame
+ printed_for_frame = video.currentFrame
 
  scale=1.0
  mousex, mousey = pygame.mouse.get_pos()
 
  glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
- glViewport (0, 0, width, height)
+ glViewport (0, 0, appView.width, appView.height)
  glMatrixMode (GL_PROJECTION)
  glLoadIdentity ()
- glOrtho(0, width, height, 0, -1, 100)
+ glOrtho(0, appView.width, appView.height, 0, -1, 100)
  glMatrixMode(GL_MODELVIEW)
  glLoadIdentity()
  glDisable(GL_DEPTH_TEST)
@@ -853,7 +756,7 @@ def drawframe( lastimage = None):
 
  glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
  glEnable(GL_TEXTURE_2D)
- DrawQuad(0,0,width,height)
+ DrawQuad(0,0,appView.width,appView.height)
 
 
  glEnable(GL_BLEND)
@@ -870,10 +773,10 @@ def drawframe( lastimage = None):
   if (pixpos[0] == -1) and (pixpos[1] == -1):
      continue
   if lastimage is not None:
-    keybgr=lastimage[ pixpos[1], pixpos[0] ]
+    keybgr = lastimage[ pixpos[1], pixpos[0] ]
   else:
-    keybgr=image[ pixpos[1], pixpos[0] ]
-  key= [ keybgr[2], keybgr[1],keybgr[0] ]
+    keybgr = video.image[ pixpos[1], pixpos[0] ]
+  key = [ keybgr[2], keybgr[1],keybgr[0] ]
 
   keybgr=[0,0,0]
   sparkkey=[0,0,0]
@@ -884,7 +787,7 @@ def drawframe( lastimage = None):
     for spark_y_add_pos in range (sh):
      sparkpixpos = getkeyp_pixel_pos(prefs.keys_pos[i][0],prefs.keyp_spark_y_pos - spark_y_add_pos )
      if not ((sparkpixpos[0] == -1) and (sparkpixpos[1] == -1)):
-       keybgr   = image[ sparkpixpos[1], sparkpixpos[0] ]
+       keybgr   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
        sparkkey = [ sparkkey[0] + keybgr[2],
                     sparkkey[1] + keybgr[1],
                     sparkkey[2] + keybgr[0] ]
@@ -1023,28 +926,21 @@ def drawframe( lastimage = None):
  glPopMatrix()
 
  if showoutputpath > time.time():
-  drawHint( width *0.5, height -20, prefs.save_to_disk_message, True)
+  drawHint( appView.width *0.5, appView.height -20, prefs.save_to_disk_message, True)
 
 
 
 def processmidi():
- global frame
- global width
- global height
- global length
- global fps
-
  global notes
  global notes_db
  global notes_de
  global notes_channel
 
- global success,image
  global separate_note_id
  global outputmid
  global basenote
 
- print("video " + str(width) + "x" + str(height))
+ print("video " + str(appView.width) + "x" + str(appView.height))
 
  basenote = prefs.octave * 12
  mf = midinotes( int(midi_file_format))
@@ -1059,16 +955,16 @@ def processmidi():
   mf.addProgramChange(track, prefs.keyp_colors_channel[i], prefs.keyp_colors_channel_prog[i])
 
  print("starting from frame:" + str(prefs.startframe))
- getFrame( prefs.startframe )
+ video.getFrame( prefs.startframe )
  notecnt=0
- lastimage = image.copy()
- while success:
+ lastimage = video.image.copy()
+ while video.success:
 
-  if (frame % 10 == 0):
+  if (video.currentFrame % 10 == 0):
    glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-   if (frame % 200 == 0):
-     loadImage(frame)
-     lastimage = image.copy()
+   if (video.currentFrame % 200 == 0):
+     appView.loadImage(video.loadImage(video.currentFrame))
+     lastimage = video.image.copy()
    #glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
    #glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_BGR, GL_UNSIGNED_BYTE, image )
    #glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
@@ -1077,13 +973,13 @@ def processmidi():
 
    glColor4f(1.0, 0.5, 1.0, 0.5)
    glDisable(GL_TEXTURE_2D)
-   p= frame / float( length )
-   DrawQuad(0,height *0.5 -10, p  * width ,height *0.5 +10)
+   p= video.currentFrame / float( video.length )
+   DrawQuad(0,appView.height *0.5 -10, p  * appView.width ,appView.height *0.5 +10)
  #  glPopMatrix();:
    pygame.display.flip()
 
 #  if (frame % 100 == 0):
-   print("processing frame: " + str(frame) + " / " + str(length) + " % " + str( math.trunc(p * 100)))
+   print("processing frame: " + str(video.currentFrame) + " / " + str(video.length) + " % " + str( math.trunc(p * 100)))
 
 #  if ( resize == 1 ):
 #    image=cv2.resize(image, (width , height))
@@ -1094,7 +990,7 @@ def processmidi():
 
     if (pixpos[0] == -1) and (pixpos[1] == -1):
       continue
-    keybgr=image[ pixpos[1], pixpos[0] ]
+    keybgr = video.image[ pixpos[1], pixpos[0] ]
     key= [ keybgr[2], keybgr[1],keybgr[0] ]
 
     keybgr=[0,0,0]
@@ -1106,7 +1002,7 @@ def processmidi():
      for spark_y_add_pos in range (sh):
        sparkpixpos = getkeyp_pixel_pos(prefs.keys_pos[i][0],prefs.keyp_spark_y_pos - spark_y_add_pos )
        if not ((sparkpixpos[0] == -1) and (sparkpixpos[1] == -1)):
-         keybgr   = image[ sparkpixpos[1], sparkpixpos[0] ]
+         keybgr   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
          sparkkey = [ sparkkey[0] + keybgr[2],
                       sparkkey[1] + keybgr[1],
                       sparkkey[2] + keybgr[0] ]
@@ -1159,21 +1055,21 @@ def processmidi():
 
     if ( prefs.debug == 1 ):
       if (keypressed == 1 ):
-        cv2.rectangle(image, (pixx-5,pixy-5), (pixx+5,pixy+5), (128,128,255), -1 )
-        cv2.putText(image, str(note_channel), (pixx-5,pixy-10), 0, 0.3, (64,128,255))
+        cv2.rectangle(video.image, (pixx-5,pixy-5), (pixx+5,pixy+5), (128,128,255), -1 )
+        cv2.putText(video.image, str(note_channel), (pixx-5,pixy-10), 0, 0.3, (64,128,255))
 #      cv2.rectangle(image, (pixx-5,pixy-5), (pixx+5,pixy+5), (255,0,255))
-      cv2.rectangle(image, (pixx-1,pixy-1), (pixx+1,pixy+1), (255,0,255))
+      cv2.rectangle(video.image, (pixx-1,pixy-1), (pixx+1,pixy+1), (255,0,255))
 #      cv2.putText(image, str(note), (pixx-5,pixy+20), 0, 0.5, (255,0,255))
 
     # reg pressed key; when keypressed==2 and previous keypressed state is 0 or 2 we should also goes here
     if keypressed==1 or (keypressed==2 and notes[note] != 1):
       # if key is not pressed
       if ( notes[note] == 0 ):
-        if ( debug_keys == 1 ):
+        if ( debug_keys == True ):
           print("note pressed on :" + str( note ))
-        notes_db[ note ] = frame
+        notes_db[ note ] = video.currentFrame
         if (first_note_time == 0):
-          first_note_time = frame / fps
+          first_note_time = video.currentFrame / video.fps
         notes_channel[ note ] = note_channel
         if ( separate_note_id != -1 ):
           if ( separate_note_id < note ):
@@ -1205,8 +1101,8 @@ def processmidi():
     if notes_tmp[ i ] != 0:
       if ( notes[note] != 0 ) and ( notes_channel[ note ] != note_channel ) and ( prefs.notes_overlap == 1 ):
         # case if one key over other
-        time = notes_db[note] / fps
-        duration = ( frame - notes_db[note] ) / fps
+        time = notes_db[note] / video.fps
+        duration = ( video.currentFrame - notes_db[note] ) / video.fps
         if (use_snap_notes_to_grid == 1):
           #print ("1 time:", time , "first_note_time:",first_note_time)
           time = snap_to_grid( time - first_note_time , notes_grid_size ) + 1
@@ -1216,14 +1112,14 @@ def processmidi():
 
         ignore = 0
         if ( duration < prefs.minimal_duration ):
-          if ( debug_keys == 1 ):
+          if ( debug_keys == True ):
             print(" duration:" + str(duration) + " < minimal_duration:" + str(prefs.minimal_duration))
           duration = prefs.minimal_duration
           if ( prefs.ignore_minimal_duration == 1 ):
             ignore=1
 
 
-        if ( debug_keys == 1 ):
+        if ( debug_keys == True ):
           print("keys (one over other), note released :" + str(note) + " de = " + str(notes_de[note]) + "- db =" + str(notes_db[note]))
           print("midi add white keys, note : " +str(note) + " time:" +str(time) + " duration:" + str(duration))
 
@@ -1232,15 +1128,15 @@ def processmidi():
           channel_has_note[ note_channel ] = 1
           notecnt+=1
 
-        notes_db[ note ] = frame
+        notes_db[ note ] = video.currentFrame
         notes_channel[ note ] = note_channel
     else:
       # if key been presed and released: two cases goes here keypressed==0 or (keypressed==2 and previous state is keypressed==1)
       if ( notes[note] != 0):
         notes[ note ] = 0
-        notes_de[ note ] = frame
-        time = notes_db[note] / fps
-        duration = ( notes_de[note] - notes_db[note] ) / fps
+        notes_de[ note ] = video.currentFrame
+        time = notes_db[note] / video.fps
+        duration = ( notes_de[note] - notes_db[note] ) / video.fps
 
         if (use_snap_notes_to_grid):
           if (first_note_time == 0):
@@ -1251,13 +1147,13 @@ def processmidi():
 
         ignore=0
         if ( duration < prefs.minimal_duration ):
-          if ( debug_keys == 1 ):
+          if ( debug_keys == True ):
             print(" duration:" + str(duration) + " < minimal_duration:" + str(prefs.minimal_duration))
           duration = prefs.minimal_duration
           if ( prefs.ignore_minimal_duration == 1 ):
             ignore=1
 
-        if ( debug_keys == 1 ):
+        if ( debug_keys == True ):
           print("keys, note released :" + str(note ) + " de = " + str(notes_de[note]) + "- db =" + str(notes_db[note]))
           print("midi add white keys, note : " +str(note) + " time:" +str(time) + " duration:" + str(duration))
         if ( not ignore ):
@@ -1268,32 +1164,32 @@ def processmidi():
         # coming here when use sparks is true and previous state is keypressed==1. We consider the key is released and then pressed again
         if (keypressed==2):
           notes[ note ] = keypressed
-          notes_db[ note ] = frame
+          notes_db[ note ] = video.currentFrame
           notes_channel[ note ] = note_channel
 
   xapp=0
   if ( prefs.debug == 1 ):
-    cv2.imwrite("/tmp/frame%d.jpg" % frame, image)  # save frame as JPEG file
+    cv2.imwrite("/tmp/frame%d.jpg" % video.currentFrame, video.image)  # save frame as JPEG file
 
 #  success,image = vidcap.read()
-  getFrame()
+  video.getFrame()
 
-  frame += 1
+  video.currentFrame += 1
   framerate()
 
-  if ( frame > endframe ):
-    success = False
+  if ( video.currentFrame > endframe ):
+    video.success = False
 
   for event in pygame.event.get():
    if event.type == pygame.QUIT:
-     success = False
+     video.success = False
      pygame.quit()
      quit()
    elif event.type == pygame.KEYDOWN:
     if event.key == pygame.K_SPACE:
-     success = False
+     video.success = False
     if event.key == pygame.K_ESCAPE:
-     running = 0
+     running = False
      pygame.quit()
      quit()
 
@@ -1315,22 +1211,18 @@ def processmidi():
  return status
 
 
-def doinit():
-  doinitGl()
-  loadImage()
-  GenFontTexture()
-
 def reconstruct():
-  global frame
   global showoutputpath
   helpWindow.hidden=1
-  frame=prefs.startframe
+  video.currentFrame = prefs.startframe
+
   t1 = datetime.datetime.now()
   processmidi()
   t2 = datetime.datetime.now()
   print("""  processing time: {} / {} = {};  """.format( t1,t2, t2-t1 ))
-  frame=prefs.startframe
-  getFrame(frame)
+
+  video.currentFrame = prefs.startframe
+  video.getFrame(video.currentFrame)
   showoutputpath = time.time() + 5
 
 
@@ -1340,14 +1232,10 @@ def main():
   global mousex, mousey
   global keyp_colormap_colors_pos
   global keyp_colormap_pos
-  global success,image
   global endframe
   global basenote
   global glwindows
   global separate_note_id
-  global frame
-  global width,height
-  global screen
   global lastkeygrabid
   global running
   #global old_spark_color, cur_spark_color
@@ -1359,34 +1247,34 @@ def main():
 
   #pyfont = pygame.font.SysFont('Sans', 20)
   #pygame.RESIZABLE
-  screen = pygame.display.set_mode( (width,height) , DOUBLEBUF|OPENGL|pygame.RESIZABLE)
+  appView.screen = pygame.display.set_mode( (appView.width,appView.height) , DOUBLEBUF|OPENGL|pygame.RESIZABLE)
   pygame.display.set_caption(filepath)
 
-  doinit()
+  appView.doinit()
 
   clock = pygame.time.Clock()
 
   # set start frame
-  video.vidcap.set(video.CAP_PROP_POS_FRAMES, frame)
+  video.vidcap.set(video.CAP_PROP_POS_FRAMES, video.currentFrame)
 
 
-  while running==1:
+  while running is True:
     mouseOnWindows = False
 #    mousex, mousey = pygame.mouse.get_pos()
     drawframe()
     mods = pygame.key.get_mods()
     for event in pygame.event.get():
      if event.type == pygame.QUIT:
-      running = 0
+      running = False
       pygame.quit()
       quit()
      elif event.type == pygame.VIDEORESIZE:
        prefs.resize = 1
        prefs.resize_width = event.w
        prefs.resize_height = event.h
-       width =  prefs.resize_width
-       height =  prefs.resize_height
-       screen = pygame.display.set_mode( (width,height) , DOUBLEBUF|OPENGL|pygame.RESIZABLE)
+       appView.width =  prefs.resize_width
+       appView.height =  prefs.resize_height
+       appView.screen = pygame.display.set_mode( (appView.width,appView.height) , DOUBLEBUF|OPENGL|pygame.RESIZABLE)
      elif event.type == pygame.KEYUP:
       for wnd in glwindows:
        wnd.update_key_up(event.key)
@@ -1397,7 +1285,7 @@ def main():
 #      print event.key
       if event.key == pygame.K_q:
        if prefs.autoclose == 1:
-         running = 0
+         running = False
        else:
          reconstruct()
       if event.key == pygame.K_o:
@@ -1411,18 +1299,18 @@ def main():
        if mods & pygame.KMOD_SHIFT:
         prefs.startframe = 0
        else:
-        prefs.startframe = int(round(vidcap.get(1)))
+        prefs.startframe = int(round(video.vidcap.get(1)))
        print("set start frame = "+ str(prefs.startframe))
 
       if event.key == pygame.K_e:
        if mods & pygame.KMOD_SHIFT:
-        endframe = length
+        endframe = video.length
        else:
-        endframe = int(round(vidcap.get(1)))
+        endframe = int(round(video.vidcap.get(1)))
        print("set end frame = "+ str(endframe))
 
       if event.key == pygame.K_ESCAPE:
-        running = 0
+        running = False
         pygame.quit()
         quit()
 
@@ -1583,15 +1471,15 @@ def main():
         if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
          pixx = int(mousex)
          pixy = int(mousey)
-         if not (( pixx >= width ) or ( pixy >= height ) or ( pixx < 0 ) or ( pixy < 0 )):
+         if not (( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 )):
            if ( prefs.resize == 1 ):
-             pixx= int(round( pixx * ( video_width / float(prefs.resize_width) )))
-             pixy= int(round( pixy * ( video_height / float(prefs.resize_height) )))
-             if ( pixx > video_width -1 ): pixx = video_width-1
-             if ( pixy > video_height-1 ): pixy = video_height-1
+             pixx= int(round( pixx * ( video.video_width / float(prefs.resize_width) )))
+             pixy= int(round( pixy * ( video.video_height / float(prefs.resize_height) )))
+             if ( pixx > video.video_width -1 ): pixx = video.video_width-1
+             if ( pixy > video.video_height-1 ): pixy = video.video_height-1
              print("original mouse x:"+str(mousex) + "x" +str(mousey) + " mapped :" +str(pixx) +"x"+str(pixy))
 
-           keybgr=image[pixy,pixx]
+           keybgr=video.image[pixy,pixx]
            prefs.keyp_colors[Gl.keyp_colormap_id][0] = keybgr[2]
            prefs.keyp_colors[Gl.keyp_colormap_id][1] = keybgr[1]
            prefs.keyp_colors[Gl.keyp_colormap_id][2] = keybgr[0]
@@ -1645,6 +1533,8 @@ def main():
 
 
 main()
-if prefs.autoclose == 1:
+
+if prefs.autoclose:
   reconstruct()
+
 print ('done...')
