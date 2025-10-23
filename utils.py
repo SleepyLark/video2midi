@@ -30,12 +30,5 @@ def framerate(t0= time.time()-1, frames=0):
         frames = 0
     return t0, frames
 
-def is_black_key(key_id: int) -> bool:
-    j = key_id % 12
-    return (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10)
 
-def is_white_key(key_num: int) -> int:
-    j = key_num % 12
-    if (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10):
-        return 1
-    return 0
+

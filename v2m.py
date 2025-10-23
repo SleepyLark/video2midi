@@ -37,9 +37,9 @@ from OpenGL.GLU import *
 from pygame.locals import *
 
 from video_io import VideoHandler
-from utils import v_rotate, snap_to_grid, framerate, is_black_key, is_white_key
+from utils import *
 from ui import MainWindow
-from midi_proc import processmidi, reconstruct
+from midi_proc import *
 
 filepath = get_video_filepath()
 print(f'file opened [{filepath}]')
@@ -88,6 +88,8 @@ appView.loadImage(video.loadImage()) # set starting image
 
 appView.fit_to_the_screen()
 
+midiHandler = MidiHandler()
+
 
 keygrab=0
 keygrabid=-1
@@ -95,16 +97,9 @@ lastkeygrabid=-1
 printed_for_frame=0
 
 # add some notes
-channel = 0
-volume = 100
-basenote = prefs.octave * 12
-
-notes=[]
-notes_db=[]
-notes_de=[]
-notes_channel=[]
-notes_tmp=[]
-notes_pressed_color=[]
+midiHandler.channel = 0
+midiHandler.volume = 100
+midiHandler.basenote = prefs.octave * 12
 
 colorWindow_colorBtns_channel_labels=[]
 colorWindow_colorBtns_channel_btns=[]
@@ -118,7 +113,6 @@ colorBtns = []
 use_snap_notes_to_grid = False
 notes_grid_size=32
 
-midi_file_format = 0
 
 line_height = 20
 running = True
@@ -151,7 +145,6 @@ def loadsettings(cfgfile: str) -> None:
   appView.update_size()
 
   if 'glwindows' in globals():
-    glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
     appView.loadImage(video.loadImage(prefs.startframe))
     settingsWindow_slider1.setvalue(prefs.keyp_delta)
     settingsWindow_slider2.setvalue(prefs.minimal_duration * 100)
@@ -170,50 +163,13 @@ def loadsettings(cfgfile: str) -> None:
 
 appView.update_size()
 
-for i in range(144):
-  notes.append(0)
-  notes_db.append(0)
-  notes_de.append(0)
-  notes_channel.append(0)
-  notes_tmp.append(0)
-  notes_pressed_color.append([0,0,0])
 
-  prefs.keyp_colors_alternate.append([0,0,0])
-  prefs.keyp_colors_alternate_sensitivity.append(0)
 
-def updatekeys(append=False):
-    xx = 0
-    if append:
-        print(f'clear keys, set to {prefs.keys_pos_cnt}')
-        prefs.keys_pos = []
-
-    for idx in range(prefs.keys_pos_cnt):
-        i = idx // 12
-        j = idx % 12
-        if (append) or (i * 12 + j > len(prefs.keys_pos) - 1):
-            prefs.keys_pos.append([0, 0])
-        prefs.keys_pos[i * 12 + j][0] = int(round(xx))
-        prefs.keys_pos[i * 12 + j][1] = 0
-        if (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10):
-            prefs.keys_pos[i * 12 + j][1] = prefs.yoffset_blackkeys
-            xx += -prefs.whitekey_width
-        if (j == 1) or (j == 6):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * prefs.blackkey_relative_position))
-        if (j == 8):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * 0.5))
-        if (j == 3) or (j == 10):
-            prefs.keys_pos[i * 12 + j][0] = int(round(xx + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
-        xx += prefs.whitekey_width
-    for i in range(len(prefs.keys_pos)):
-        prefs.keys_pos[i] = v_rotate(prefs.keys_pos[i], prefs.keys_angle)
-        prefs.keys_pos[i][0] = -prefs.keys_pos[i][0]
-
-updatekeys(True)
+update_key_positions(True)
 
 loadsettings(inifile)
 
 tStart = t0 = time.time()-1
-frames = 0
 
 def update_channels(sender):
    print( 'update_channels...' +str(sender.index))
@@ -236,22 +192,22 @@ def disable_color(sender):
 
 
 def readkeycolor(i):
-   pixx=int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
-   pixy=int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
+   pix_x=int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
+   pix_y=int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
 
-   if ( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 ): return
-   if ( prefs.resize == 1 ):
-     pixxo=pixx
-     pixyo=pixy
+   if ( pix_x >= appView.width ) or ( pix_y >= appView.height ) or ( pix_x < 0 ) or ( pix_y < 0 ): return
+   if ( prefs.resize == True ):
+     og_pix_x=pix_x
+     og_pix_y=pix_y
 
-     pixx= int(round( pixx * ( video.video_width / float(prefs.resize_width) )))
-     pixy= int(round( pixy * ( video.video_height / float(prefs.resize_height) )))
-     if ( pixx > video.video_width -1 ): pixx = video.video_width-1
-     if ( pixy > video.video_height-1 ): pixy= video.video_height-1
+     pix_x= int(round( pix_x * ( video.video_width / float(prefs.resize_width) )))
+     pix_y= int(round( pix_y * ( video.video_height / float(prefs.resize_height) )))
+     if ( pix_x > video.video_width -1 ): pix_x = video.video_width-1
+     if ( pix_y > video.video_height-1 ): pix_y= video.video_height-1
     #      print "original x:"+str(pixxo) + "x" +str(pixyo) + " mapped :" +str(pixx) +"x"+str(pixy)
 
-   keybgr=video.image[pixy,pixx]
-   key=[ keybgr[2], keybgr[1],keybgr[0] ]
+   key_BGR = video.image[pix_y,pix_x]
+   key=[ key_BGR[2], key_BGR[1],key_BGR[0] ]
 
    prefs.keyp_colors_alternate[i] = key
 
@@ -274,7 +230,7 @@ def update_sparks_delta(sender,value):
 
 def update_blackkey_relative_position(sender,value):
   prefs.blackkey_relative_position = value * 0.001
-  updatekeys()
+  update_key_positions()
 
 def update_sync_notes_start_pos_time_delta(sender,value):
   prefs.sync_notes_start_pos_time_delta = value *0.001
@@ -316,16 +272,14 @@ def snap_notes_to_the_grid(sender):
   use_snap_notes_to_grid = sender.switch_status
 
 def raise_octave(*args):
-  global basenote
   prefs.octave += 1
   if (prefs.octave > 7): prefs.octave = 7
-  basenote = prefs.octave * 12
+  midiHandler.basenote = prefs.octave * 12
 
 def lower_octave(*args):
-  global basenote
   prefs.octave -= 1
   if (prefs.octave < 0): prefs.octave = 0
-  basenote = prefs.octave * 12
+  midiHandler.basenote = prefs.octave * 12
 
 def onPallete_click(sender, index):
   selected_color_delta.color = sender.color
@@ -402,12 +356,11 @@ def switch_resize_windows(sender):
   appView.resize_window()
 
 def scroll_by_steps( steps ):
-  video.currentFrame+=steps
+  video.currentFrame += steps
   if (video.currentFrame > video.length *0.99):
-    video.currentFrame=math.trunc(video.length *0.99)
+    video.currentFrame = math.trunc(video.length *0.99)
   if (video.currentFrame < 1):
     video.currentFrame=1
-  glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
   appView.loadImage(video.loadImage(video.currentFrame))
 
 def scroll_forward_by_frame(sender):
@@ -424,12 +377,10 @@ def scroll_fast_prev(sender):
 
 def scroll_to_start(sender):
   video.currentFrame=0
-  glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
   appView.loadImage(video.loadImage(video.currentFrame))
 
 def scroll_to_end(sender):
   video.currentFrame=video.length-100
-  glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
   appView.loadImage(video.loadImage(video.currentFrame))
 
 def btndown_save_settings(sender):
@@ -447,19 +398,17 @@ def change_autoclose(sender):
 
 def rotate_cw(sender):
   prefs.keys_angle -= 5
-  updatekeys()
+  update_key_positions()
 def rotate_ccw(sender):
   prefs.keys_angle += 5
-  updatekeys()
+  update_key_positions()
 
 def update_keys_pos_cnt(sender,value):
   prefs.keys_pos_cnt=int(value)
   
 def change_cnt(sender):
   print('change count')
-  updatekeys(True)
-
-
+  update_key_positions(True)
 
 
 def vertical_align_keys( separate_black_keys = 1, align = 1 ):
@@ -611,7 +560,7 @@ settingsWindow_slider3 = GLSlider(1,133, 240,18, 30,240,prefs.tempo,label="Outpu
 settingsWindow_slider3.round=0
 settingsWindow.appendChild(settingsWindow_slider3)
 
-settingsWindow_slider4 = GLSlider(1,175, 240,18, 0,2,midi_file_format,label="Output midi format")
+settingsWindow_slider4 = GLSlider(1,175, 240,18, 1,2,prefs.midi_file_format,label="Output midi format type")
 settingsWindow_slider4.round=0
 settingsWindow.appendChild(settingsWindow_slider4)
 
@@ -709,19 +658,19 @@ sparksWindow.appendChild( use_percolor_delta )
 #frame=801
 
 def getkeyp_pixel_pos( x:int, y:int ) -> list[int]:
-  pixx=int(prefs.xoffset_whitekeys + x)
-  pixy=int(prefs.yoffset_whitekeys + y)
+  pix_x=int(prefs.xoffset_whitekeys + x)
+  pix_y=int(prefs.yoffset_whitekeys + y)
 
-  if ( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 ):
+  if ( pix_x >= appView.width ) or ( pix_y >= appView.height ) or ( pix_x < 0 ) or ( pix_y < 0 ):
     return [-1,-1]
 
   #if ( prefs.resize == 1 ):
   if 1==1: #disabled
-    pixx= int(round( pixx * ( video.video_width / float(appView.width) )))
-    pixy= int(round( pixy * ( video.video_height / float(appView.height) )))
-    if ( pixx > video.video_width -1 ): pixx = video.video_width-1
-    if ( pixy > video.video_height-1 ): pixy= video.video_height-1
-  return [pixx,pixy]
+    pix_x= int(round( pix_x * ( video.video_width / float(appView.width) )))
+    pix_y= int(round( pix_y * ( video.video_height / float(appView.height) )))
+    if ( pix_x > video.video_width -1 ): pix_x = video.video_width-1
+    if ( pix_y > video.video_height-1 ): pix_y= video.video_height-1
+  return [pix_x,pix_y]
 
 def drawframe( lastimage = None):
  global pyfont
@@ -730,8 +679,7 @@ def drawframe( lastimage = None):
  global keyp_colormap_colors_pos
  global keyp_colormap_pos
  global printed_for_frame
- global notes_tmp
- global notes_pressed_color
+
  #global old_spark_color
  #global cur_spark_color
  print_for_frame_debug = False
@@ -773,12 +721,12 @@ def drawframe( lastimage = None):
   if (pixpos[0] == -1) and (pixpos[1] == -1):
      continue
   if lastimage is not None:
-    keybgr = lastimage[ pixpos[1], pixpos[0] ]
+    key_BGR = lastimage[ pixpos[1], pixpos[0] ]
   else:
-    keybgr = video.image[ pixpos[1], pixpos[0] ]
-  key = [ keybgr[2], keybgr[1],keybgr[0] ]
+    key_BGR = video.image[ pixpos[1], pixpos[0] ]
+  key = [ key_BGR[2], key_BGR[1],key_BGR[0] ]
 
-  keybgr=[0,0,0]
+  key_BGR=[0,0,0]
   sparkkey=[0,0,0]
   if prefs.use_sparks:
     sh = int(sparks_slider_height.value)
@@ -787,10 +735,10 @@ def drawframe( lastimage = None):
     for spark_y_add_pos in range (sh):
      sparkpixpos = getkeyp_pixel_pos(prefs.keys_pos[i][0],prefs.keyp_spark_y_pos - spark_y_add_pos )
      if not ((sparkpixpos[0] == -1) and (sparkpixpos[1] == -1)):
-       keybgr   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
-       sparkkey = [ sparkkey[0] + keybgr[2],
-                    sparkkey[1] + keybgr[1],
-                    sparkkey[2] + keybgr[0] ]
+       key_BGR   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
+       sparkkey = [ sparkkey[0] + key_BGR[2],
+                    sparkkey[1] + key_BGR[1],
+                    sparkkey[2] + key_BGR[0] ]
     sparkkey = [ sparkkey[0] / sh,  sparkkey[1] / sh,sparkkey[2] / sh]
     #cur_spark_color[i] = sparkkey
   else:
@@ -822,7 +770,7 @@ def drawframe( lastimage = None):
          if ( abs( int(key[0]) - keyc[0] ) < delta ) and ( abs( int(key[1]) - keyc[1] ) < delta ) and ( abs( int(key[2]) - keyc[2] ) < delta ):
           keypressed=1
           pressedcolor = keyc
-          notes_pressed_color[i] = keyc
+          midiHandler.notes_pressed_color[i] = keyc
           if prefs.use_sparks:
             #unpressed_by_spark_delta = ( abs( int(sparkkey[0]) - keyc[0] ) < spark_delta ) and ( abs( int(sparkkey[1]) - keyc[1] ) < spark_delta ) and ( abs( int(sparkkey[2]) - keyc[2] ) < spark_delta )
             has_spark_delta = ((sparkkey[0] - keyc[0] ) > spark_delta ) or ((sparkkey[1] - keyc[1] ) > spark_delta ) or ((sparkkey[2] - keyc[2] ) > spark_delta )
@@ -832,24 +780,24 @@ def drawframe( lastimage = None):
              print("note %d key_id %d spark_delta %d sparkkey vs keyc %d %d, %d %d, %d %d" % (note, key_id, spark_delta, sparkkey[0], keyc[0], sparkkey[1], keyc[1], sparkkey[2], keyc[2]))
             if ( not has_spark_delta ):
              keypressed=2
-  notes_tmp[i] = keypressed
+  midiHandler.notes_tmp[i] = keypressed
 
  if prefs.rollcheck:
   for i in range(1, len( prefs.keys_pos) -1 ):
       if prefs.rollcheck_priority == 0:
-        if not is_white_key(i):
+        if is_black_key(i):
         # Priority on Black keys
-          if notes_tmp[i+1] >0: notes_tmp[i] = 0
-          if notes_tmp[i-1] >0: notes_tmp[i] = 0
+          if midiHandler.notes_tmp[i+1] >0: midiHandler.notes_tmp[i] = 0
+          if midiHandler.notes_tmp[i-1] >0: midiHandler.notes_tmp[i] = 0
       else:
         if is_white_key(i):
         # Priority on White keys
-          if notes_tmp[i+1] >0: notes_tmp[i] = 0
-          if notes_tmp[i-1] >0: notes_tmp[i] = 0
+          if midiHandler.notes_tmp[i+1] >0: midiHandler.notes_tmp[i] = 0
+          if midiHandler.notes_tmp[i-1] >0: midiHandler.notes_tmp[i] = 0
 
  for i in range( len( prefs.keys_pos) ):
-  keypressed = notes_tmp[i]
-  pressedcolor = notes_pressed_color[i]
+  keypressed = midiHandler.notes_tmp[i]
+  pressedcolor = midiHandler.notes_pressed_color[i]
 
   glPushMatrix()
   glTranslatef(prefs.keys_pos[i][0],prefs.keys_pos[i][1],0)
@@ -931,19 +879,13 @@ def drawframe( lastimage = None):
 
 
 def processmidi():
- global notes
- global notes_db
- global notes_de
- global notes_channel
-
  global separate_note_id
  global outputmid
- global basenote
 
  print("video " + str(appView.width) + "x" + str(appView.height))
 
- basenote = prefs.octave * 12
- mf = midinotes( int(midi_file_format))
+ midiHandler.basenote = prefs.octave * 12
+ mf = midinotes( prefs.midi_file_format)
  track = 0 # the only track
  time = 0 # start at the beginning
 
@@ -990,10 +932,10 @@ def processmidi():
 
     if (pixpos[0] == -1) and (pixpos[1] == -1):
       continue
-    keybgr = video.image[ pixpos[1], pixpos[0] ]
-    key= [ keybgr[2], keybgr[1],keybgr[0] ]
+    key_BGR = video.image[ pixpos[1], pixpos[0] ]
+    key= [ key_BGR[2], key_BGR[1],key_BGR[0] ]
 
-    keybgr=[0,0,0]
+    key_BGR=[0,0,0]
     sparkkey=[0,0,0]
     if prefs.use_sparks:
      sh = int(sparks_slider_height.value)
@@ -1002,10 +944,10 @@ def processmidi():
      for spark_y_add_pos in range (sh):
        sparkpixpos = getkeyp_pixel_pos(prefs.keys_pos[i][0],prefs.keyp_spark_y_pos - spark_y_add_pos )
        if not ((sparkpixpos[0] == -1) and (sparkpixpos[1] == -1)):
-         keybgr   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
-         sparkkey = [ sparkkey[0] + keybgr[2],
-                      sparkkey[1] + keybgr[1],
-                      sparkkey[2] + keybgr[0] ]
+         key_BGR   = video.image[ sparkpixpos[1], sparkpixpos[0] ]
+         sparkkey = [ sparkkey[0] + key_BGR[2],
+                      sparkkey[1] + key_BGR[1],
+                      sparkkey[2] + key_BGR[0] ]
      sparkkey = [ sparkkey[0] / sh,  sparkkey[1] / sh,sparkkey[2] / sh]
     else:
       sparkkey = [0,0,0]
@@ -1062,47 +1004,47 @@ def processmidi():
 #      cv2.putText(image, str(note), (pixx-5,pixy+20), 0, 0.5, (255,0,255))
 
     # reg pressed key; when keypressed==2 and previous keypressed state is 0 or 2 we should also goes here
-    if keypressed==1 or (keypressed==2 and notes[note] != 1):
+    if keypressed==1 or (keypressed==2 and midiHandler.notes[note] != 1):
       # if key is not pressed
-      if ( notes[note] == 0 ):
+      if ( midiHandler.notes[note] == 0 ):
         if ( debug_keys == True ):
           print("note pressed on :" + str( note ))
-        notes_db[ note ] = video.currentFrame
+        midiHandler.notes_db[ note ] = video.currentFrame
         if (first_note_time == 0):
           first_note_time = video.currentFrame / video.fps
-        notes_channel[ note ] = note_channel
+        midiHandler.notes_channel[ note ] = note_channel
         if ( separate_note_id != -1 ):
           if ( separate_note_id < note ):
-            notes_channel[ note ] = 0
+            midiHandler.notes_channel[ note ] = 0
           else:
-            notes_channel[ note ] = 1
+            midiHandler.notes_channel[ note ] = 1
 
       # always update to last press state
-      notes[ note ] = keypressed
-    notes_tmp[ note] = keypressed
+      midiHandler.notes[ note ] = keypressed
+    midiHandler.notes_tmp[ note] = keypressed
  # save fall notes and then we can check for a near keys with priority...
   if prefs.rollcheck:
     for i in range(1, len( prefs.keys_pos)-1 ):
-      if notes[ i ] != 0:
+      if midiHandler.notes[ i ] != 0:
         if prefs.rollcheck_priority == 0:
           if not is_white_key(i):
           # Priority on Black keys
-            if notes[i+1] >0 and notes_tmp[i] >0: notes[i] = 0
-            if notes[i-1] >0 and notes_tmp[i] >0: notes[i] = 0
+            if midiHandler.notes[i+1] >0 and midiHandler.notes_tmp[i] >0: midiHandler.notes[i] = 0
+            if midiHandler.notes[i-1] >0 and midiHandler.notes_tmp[i] >0: midiHandler.notes[i] = 0
         else:
           if is_white_key(i):
           # Priority on White keys
-            if notes[i+1] >0 and notes_tmp[i] >0: notes[i] = 0
-            if notes[i-1] >0 and notes_tmp[i] >0: notes[i] = 0
+            if midiHandler.notes[i+1] >0 and midiHandler.notes_tmp[i] >0: midiHandler.notes[i] = 0
+            if midiHandler.notes[i-1] >0 and midiHandler.notes_tmp[i] >0: midiHandler.notes[i] = 0
   #
   for i in range( len( prefs.keys_pos) ):
     note=i
-    keypressed =  notes[ note ]
-    if notes_tmp[ i ] != 0:
-      if ( notes[note] != 0 ) and ( notes_channel[ note ] != note_channel ) and ( prefs.notes_overlap == 1 ):
+    keypressed =  midiHandler.notes[ note ]
+    if midiHandler.notes_tmp[ i ] != 0:
+      if ( midiHandler.notes[note] != 0 ) and ( midiHandler.notes_channel[ note ] != note_channel ) and ( prefs.notes_overlap == 1 ):
         # case if one key over other
-        time = notes_db[note] / video.fps
-        duration = ( video.currentFrame - notes_db[note] ) / video.fps
+        time = midiHandler.notes_db[note] / video.fps
+        duration = ( video.currentFrame - midiHandler.notes_db[note] ) / video.fps
         if (use_snap_notes_to_grid == 1):
           #print ("1 time:", time , "first_note_time:",first_note_time)
           time = snap_to_grid( time - first_note_time , notes_grid_size ) + 1
@@ -1120,23 +1062,23 @@ def processmidi():
 
 
         if ( debug_keys == True ):
-          print("keys (one over other), note released :" + str(note) + " de = " + str(notes_de[note]) + "- db =" + str(notes_db[note]))
+          print("keys (one over other), note released :" + str(note) + " de = " + str(midiHandler.notes_de[note]) + "- db =" + str(midiHandler.notes_db[note]))
           print("midi add white keys, note : " +str(note) + " time:" +str(time) + " duration:" + str(duration))
 
         if ( not ignore ):
-          mf.addNote(track, notes_channel[note] , basenote + note, time * prefs.tempo / 60.0 , duration * prefs.tempo / 60.0 , volume )
+          mf.addNote(track, midiHandler.notes_channel[note] , midiHandler.basenote + note, time * prefs.tempo / 60.0 , duration * prefs.tempo / 60.0 , midiHandler.volume )
           channel_has_note[ note_channel ] = 1
           notecnt+=1
 
-        notes_db[ note ] = video.currentFrame
-        notes_channel[ note ] = note_channel
+        midiHandler.notes_db[ note ] = video.currentFrame
+        midiHandler.notes_channel[ note ] = note_channel
     else:
       # if key been presed and released: two cases goes here keypressed==0 or (keypressed==2 and previous state is keypressed==1)
-      if ( notes[note] != 0):
-        notes[ note ] = 0
-        notes_de[ note ] = video.currentFrame
-        time = notes_db[note] / video.fps
-        duration = ( notes_de[note] - notes_db[note] ) / video.fps
+      if ( midiHandler.notes[note] != 0):
+        midiHandler.notes[ note ] = 0
+        midiHandler.notes_de[ note ] = video.currentFrame
+        time = midiHandler.notes_db[note] / video.fps
+        duration = ( midiHandler.notes_de[note] - midiHandler.notes_db[note] ) / video.fps
 
         if (use_snap_notes_to_grid):
           if (first_note_time == 0):
@@ -1154,18 +1096,18 @@ def processmidi():
             ignore=1
 
         if ( debug_keys == True ):
-          print("keys, note released :" + str(note ) + " de = " + str(notes_de[note]) + "- db =" + str(notes_db[note]))
+          print("keys, note released :" + str(note ) + " de = " + str(midiHandler.notes_de[note]) + "- db =" + str(midiHandler.notes_db[note]))
           print("midi add white keys, note : " +str(note) + " time:" +str(time) + " duration:" + str(duration))
         if ( not ignore ):
-          mf.addNote(track, notes_channel[note] , basenote+ note, time * prefs.tempo / 60.0 , duration * prefs.tempo / 60.0 , volume )
+          mf.addNote(track, midiHandler.notes_channel[note] , midiHandler.basenote+ note, time * prefs.tempo / 60.0 , duration * prefs.tempo / 60.0 , midiHandler.volume )
 
           channel_has_note[ note_channel ] = 1
           notecnt+=1
         # coming here when use sparks is true and previous state is keypressed==1. We consider the key is released and then pressed again
         if (keypressed==2):
-          notes[ note ] = keypressed
-          notes_db[ note ] = video.currentFrame
-          notes_channel[ note ] = note_channel
+          midiHandler.notes[ note ] = keypressed
+          midiHandler.notes_db[ note ] = video.currentFrame
+          midiHandler.notes_channel[ note ] = note_channel
 
   xapp=0
   if ( prefs.debug == 1 ):
@@ -1233,7 +1175,6 @@ def main():
   global keyp_colormap_colors_pos
   global keyp_colormap_pos
   global endframe
-  global basenote
   global glwindows
   global separate_note_id
   global lastkeygrabid
@@ -1339,10 +1280,10 @@ def main():
 
       if event.key == pygame.K_PLUS or event.key == pygame.K_KP_PLUS or event.key == pygame.K_EQUALS:
         prefs.keys_angle -= 5
-        updatekeys()
+        update_key_positions()
       if event.key == pygame.K_MINUS or event.key == pygame.K_KP_MINUS:
         prefs.keys_angle += 5
-        updatekeys()
+        update_key_positions()
 
 
       if event.key == pygame.K_UP:
@@ -1354,7 +1295,7 @@ def main():
           prefs.yoffset_blackkeys -= 1
          else:
           prefs.yoffset_blackkeys -= 2
-         updatekeys( )
+         update_key_positions( )
 
       if event.key == pygame.K_DOWN:
        if mods & pygame.KMOD_ALT:
@@ -1364,7 +1305,7 @@ def main():
           prefs.yoffset_blackkeys += 1
          else:
           prefs.yoffset_blackkeys += 2
-         updatekeys( )
+         update_key_positions( )
 
       if event.key == pygame.K_TAB:
        showOrhideallwindows(None)
@@ -1374,14 +1315,14 @@ def main():
         prefs.whitekey_width-=0.1
        else:
         prefs.whitekey_width-=1.0
-       updatekeys( )
+       update_key_positions( )
 
       if event.key == pygame.K_RIGHT:
        if mods & pygame.KMOD_SHIFT:
         prefs.whitekey_width+=0.1
        else:
         prefs.whitekey_width+=1.0
-       updatekeys( )
+       update_key_positions( )
 
       if event.key == pygame.K_HOME:
         scroll_to_start(None)
@@ -1460,29 +1401,29 @@ def main():
       if ( event.button == 4 ):
         prefs.whitekey_width+=0.05
 #        print "whitekey_width="+str(whitekey_width)
-        updatekeys( )
+        update_key_positions( )
 #        scale+=0.1
       if ( event.button == 5 ):
         prefs.whitekey_width-=0.05
 #        print "whitekey_width="+str(whitekey_width)
-        updatekeys( )
+        update_key_positions( )
 
       if ( event.button == 1 ):
         if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
-         pixx = int(mousex)
-         pixy = int(mousey)
-         if not (( pixx >= appView.width ) or ( pixy >= appView.height ) or ( pixx < 0 ) or ( pixy < 0 )):
+         pix_x = int(mousex)
+         pix_y = int(mousey)
+         if not (( pix_x >= appView.width ) or ( pix_y >= appView.height ) or ( pix_x < 0 ) or ( pix_y < 0 )):
            if ( prefs.resize == 1 ):
-             pixx= int(round( pixx * ( video.video_width / float(prefs.resize_width) )))
-             pixy= int(round( pixy * ( video.video_height / float(prefs.resize_height) )))
-             if ( pixx > video.video_width -1 ): pixx = video.video_width-1
-             if ( pixy > video.video_height-1 ): pixy = video.video_height-1
-             print("original mouse x:"+str(mousex) + "x" +str(mousey) + " mapped :" +str(pixx) +"x"+str(pixy))
+             pix_x= int(round( pix_x * ( video.video_width / float(prefs.resize_width) )))
+             pix_y= int(round( pix_y * ( video.video_height / float(prefs.resize_height) )))
+             if ( pix_x > video.video_width -1 ): pix_x = video.video_width-1
+             if ( pix_y > video.video_height-1 ): pix_y = video.video_height-1
+             print("original mouse x:"+str(mousex) + "x" +str(mousey) + " mapped :" +str(pix_x) +"x"+str(pix_y))
 
-           keybgr=video.image[pixy,pixx]
-           prefs.keyp_colors[Gl.keyp_colormap_id][0] = keybgr[2]
-           prefs.keyp_colors[Gl.keyp_colormap_id][1] = keybgr[1]
-           prefs.keyp_colors[Gl.keyp_colormap_id][2] = keybgr[0]
+           key_BGR=video.image[pix_y,pix_x]
+           prefs.keyp_colors[Gl.keyp_colormap_id][0] = key_BGR[2]
+           prefs.keyp_colors[Gl.keyp_colormap_id][1] = key_BGR[1]
+           prefs.keyp_colors[Gl.keyp_colormap_id][2] = key_BGR[0]
         else:
 #        if not (mods & pygame.KMOD_CTRL):
          if not colorWindow.active and not mouseOnWindows:

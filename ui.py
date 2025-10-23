@@ -67,6 +67,7 @@ class MainWindow:
         #     video.getFrame(idframe)
         #     image = video.image
         self.currentImage = image
+        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)

@@ -15,13 +15,13 @@ class VideoHandler:
         self.video_width = int(self.vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_height = int(self.vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.fps = float(self.vidcap.get(cv2.CAP_PROP_FPS))
-        self.frame = 0
+        self.currentFrame = 0
         self.success = False
         self.image = None
         self.convertCvtColor = True
         self.COLOR_BGR2RGB = cv2.COLOR_BGR2RGB
         # set start frame
-        self.vidcap.set(cv2.CAP_PROP_POS_FRAMES, self.frame)
+        self.vidcap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self.vidcap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
         self.success, self.image = self.vidcap.read()
 
@@ -46,8 +46,7 @@ class VideoHandler:
 
     def getFrame(self, framenum=-1):
         if self.fps == 0:
-            return False, None
-
+            return
         goto_frame_by_msec = False
         if framenum != -1:
             if goto_frame_by_msec:
@@ -66,10 +65,6 @@ class VideoHandler:
                 print(f"OpenCV bug, Requesting frame {framenum} but get position on {curframe}")
 
         self.success, self.image = self.vidcap.read()
-        if not self.success:
-            print(f"Failed to read frame {framenum if framenum != -1 else 'current'}")
-            self.image = None
-            return False, None
 
         return self.success, self.image
 
