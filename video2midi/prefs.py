@@ -2,6 +2,7 @@
 class prefs:
 	debug = 0
 	miditrackname='Sample Track'
+	midi_file_format = 1
 	notes_overlap = False
 
 	resize= 0
