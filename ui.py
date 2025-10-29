@@ -12,6 +12,7 @@ from pygame.locals import *
 from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
+import SettingsWindow
 import cv2
 import time, math, os, ntpath
 
@@ -30,6 +31,10 @@ class MainWindow:
         self.screen = pygame.display.set_mode((self.width, self.height), DOUBLEBUF | OPENGL | pygame.RESIZABLE)
         # Now it's safe to initialize GL objects
         doinitGl()
+
+        self.settingsWindow = SettingsWindow(24+275, 80, 550, 380)
+        self.glwindows=[]
+        self.glwindows.append(self.settingsWindow)
         
     def fit_to_the_screen(self) -> None:
         infoObject = pygame.display.Info()
