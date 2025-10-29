@@ -96,10 +96,6 @@ keygrabid=-1
 lastkeygrabid=-1
 printed_for_frame=0
 
-# add some notes
-midiHandler.channel = 0
-midiHandler.volume = 100
-midiHandler.basenote = prefs.octave * 12
 
 colorWindow_colorBtns_channel_labels=[]
 colorWindow_colorBtns_channel_btns=[]
