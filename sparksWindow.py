@@ -22,7 +22,7 @@ class SparksWindow(GLWindow):
         self.root.appendChild( GLButton(413+33,24 ,32,22,1, [96,96,128], "y-" ,self.app.update_sparks_y_pos, hint="move sparks lower") )
         self.root.appendChild( GLLabel( 6,50,  "alt + up / down - move sparks label up or down " ))
 
-        use_percolor_delta = GLButton(313,100 ,190,22,1, [128,128,128], "use percolor sensitivity" ,change_use_percolor_delta,switch=1, switch_status=prefs.use_sparks )
+        use_percolor_delta = GLButton(313,100 ,190,22,1, [128,128,128], "use percolor sensitivity" ,self.app.change_use_percolor_delta,switch=1, switch_status=prefs.use_sparks )
         self.root.appendChild( use_percolor_delta )
 
     def addSliders(self):
