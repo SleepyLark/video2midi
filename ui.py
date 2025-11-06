@@ -12,12 +12,19 @@ from pygame.locals import *
 from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
-import SettingsWindow
+from settingsWindow import *
+from colorWindow import *
+from helpWindow import *
+from extraWindow import *
+from sparksWindow import *
+from controller import  *
 import cv2
 import time, math, os, ntpath
 
 class MainWindow:
-    def __init__(self, width = 640, height = 480):
+    def __init__(self, app, width = 640, height = 480):
+        self.app = app
+        
         self.width = width
         self.height = height
         self.defaultWidth = width
@@ -32,9 +39,22 @@ class MainWindow:
         # Now it's safe to initialize GL objects
         doinitGl()
 
-        self.settingsWindow = SettingsWindow(24+275, 80, 550, 380)
+        self.ShowHideButton = GLButton(0,0 ,13,13, 1, [128,128,128], "" , app.showOrhideallwindows ,switch=1, switch_status=0 )
+        self.ShowHideButton.active = 2
+
+        self.settingsWindow = SettingsWindow(self.app,24+275, 80, 550, 380)
+        wh = ( (len(prefs.keyp_colors) // 2)+2 ) * 24 - 24
+        self.colorWindow = ColorWindow(self.app,24, 50, 274, wh)
+        self.helpWindow = HelpWindow(self.app,24+270, 50, 750, 535)
+        self.extraWindow = ExtraWindow(self.app,24+270+550+6, 80, 510, 250)
+        self.sparksWindow = SparksWindow(self.app, 24+270+550+6, 300, 510, 185)
+
         self.glwindows=[]
+
+        self.glwindows.append(self.ShowHideButton)
         self.glwindows.append(self.settingsWindow)
+        self.glwindows.append(self.colorWindow)
+        self.glwindows.append(self.extraWindow)
         
     def fit_to_the_screen(self) -> None:
         infoObject = pygame.display.Info()
@@ -102,9 +122,38 @@ class MainWindow:
 
     # UI widget/window setup, drawframe, and event loop will be moved here from v2m.py
     # Example stub for drawframe:
-    def drawframe(lastimage=None):
-        # ... (full drawframe code from v2m.py, unchanged)
-        pass  # Replace with actual code
+    def drawframe(self, lastimage=None):
+        scale=1.0
+
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+        glViewport (0, 0, self.width, self.height)
+        glMatrixMode (GL_PROJECTION)
+        glLoadIdentity ()
+        glOrtho(0, self.width, self.height, 0, -1, 100)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        glDisable(GL_DEPTH_TEST)
+
+        glScale(scale,scale,1)
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+
+        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
+        glEnable(GL_TEXTURE_2D)
+        DrawQuad(0,0,self.width,self.height)
+
+
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+        glColor4f(1.0, 0.5, 1.0, 0.5)
+        glPushMatrix()
+        glTranslatef(prefs.xoffset_whitekeys,prefs.yoffset_whitekeys,0)
+        glDisable(GL_TEXTURE_2D)
+
+        glPopMatrix()
+
+        #for i in range(len(self.glwindows)):
+            #self.glwindows[i].draw()
 
     # Example stub for main event loop:
     def main_event_loop():
