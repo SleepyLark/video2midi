@@ -28,24 +28,32 @@ class AppController:
         self.endframe = self.video.length
         self.running = True
 
-        logger.info("hi!")
+        # set starting image
+        self.appView.loadImage(self.video.get_image())
+        self.appView.fit_to_the_screen()
 
     def start(self):
         while self.running:
             self.appView.drawframe()
-            
+            mods = pygame.key.get_mods()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    pygame.quit()
+                    quit()
+                elif event.type == pygame.VIDEORESIZE:
+                    prefs.resize = 1
+                    prefs.resize_width = event.w
+                    prefs.resize_height = event.h
+                    self.appView.resize_window()
 
-
-    
-    def showOrhideallwindows(sender):
-        if sender is None:
-            ShowHideButton.switch_status = not ShowHideButton.switch_status
+    def loadsettings(self, cfgfile: str):
+        settings.loadsettings(cfgfile)
+        settings.compatibleColors(self.appView.get_colorBtn_list())
         
-        print('switch hidden for all windows')
-        for i in glwindows:
-            #print("i.type =%s" % (str(type(i))) )
-            if isinstance(i, GLWindow ):
-                i.fullhidden = ShowHideButton.switch_status   
+        self.appView.loadImage(self.video.get_image(prefs.startframe))
+        self.appView.update_values_from_settings()
+        self.appView.update_size()          
 
     def start_recreate_midi(self, sender):
         if prefs.autoclose == 1:
@@ -53,21 +61,18 @@ class AppController:
         else:
             #reconstruct()
             pass
+    
+    def show_or_hide_all_windows(self,sender):
+        self.appView.toggle_windows()
 
-    def set_start_frame_to_current_frame(sender):
-        if sender.index == 0:
-            prefs.startframe = int(round(self.video.vidcap.get(1)))
-        else:
-            prefs.startframe = 0
-        print("set start frame = "+ str(prefs.startframe))
 
-    def set_end_frame_to_current_frame(sender):
-        global endframe
-        if sender.index == 0:
-            endframe = int(round(self.video.vidcap.get(1)))
-        else:
-            endframe = self.video.length
-        print("set end frame = "+ str(endframe), sender.index)
+    def set_start_frame_to_current_frame(self,sender):
+        prefs.startframe = self.video.get_current_frame_int()
+        logger.debug(f"set start frame = {prefs.startframe}")
+
+    def set_end_frame_to_current_frame(self, sender):
+        endframe = self.video.get_current_frame_int()
+        logger.debug(f"set end frame = {endframe}")
 
     def switch_notes_overlap(sender):
         if sender is None:
@@ -129,7 +134,8 @@ class AppController:
             self.video.currentFrame = math.trunc(self.video.length *0.99)
         if (self.video.currentFrame < 1):
             self.video.currentFrame=1
-        self.appView.loadImage(self.video.loadImage(self.video.currentFrame))
+        
+        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
 
     def scroll_forward_by_frame(sender):
         scroll_by_steps(1)
@@ -143,13 +149,13 @@ class AppController:
     def scroll_fast_prev(sender):
         scroll_by_steps(-100)
 
-    def scroll_to_start(sender):
-        video.currentFrame=0
-        appView.loadImage(video.loadImage(video.currentFrame))
+    def scroll_to_start(self, sender):
+        self.video.currentFrame=0
+        self.appView.loadImage(self.video.get_image())
 
-    def scroll_to_end(sender):
-        video.currentFrame=video.length-100
-        appView.loadImage(video.loadImage(video.currentFrame))
+    def scroll_to_end(self, sender):
+        self.video.currentFrame = self.video.length-100
+        self.appView.loadImage(self.video.get_image())
 
     def rotate_cw(sender):
         prefs.keys_angle -= 5

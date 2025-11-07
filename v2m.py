@@ -84,7 +84,7 @@ showoutputpath = 0
 # ---------------------------------------------------------------------------
 
 appView = MainWindow(video.video_width, video.video_height)
-appView.loadImage(video.loadImage()) # set starting image
+appView.loadImage(video.get_image()) # set starting image
 
 appView.fit_to_the_screen()
 
@@ -141,7 +141,7 @@ def loadsettings(cfgfile: str) -> None:
   appView.update_size()
 
   if 'glwindows' in globals():
-    appView.loadImage(video.loadImage(prefs.startframe))
+    appView.loadImage(video.get_image(prefs.startframe))
     settingsWindow_slider1.setvalue(prefs.keyp_delta)
     settingsWindow_slider2.setvalue(prefs.minimal_duration * 100)
     settingsWindow_slider3.setvalue(prefs.tempo)
@@ -357,7 +357,7 @@ def scroll_by_steps( steps ):
     video.currentFrame = math.trunc(video.length *0.99)
   if (video.currentFrame < 1):
     video.currentFrame=1
-  appView.loadImage(video.loadImage(video.currentFrame))
+  appView.loadImage(video.get_image(video.currentFrame))
 
 def scroll_forward_by_frame(sender):
   scroll_by_steps(1)
@@ -373,11 +373,11 @@ def scroll_fast_prev(sender):
 
 def scroll_to_start(sender):
   video.currentFrame=0
-  appView.loadImage(video.loadImage(video.currentFrame))
+  appView.loadImage(video.get_image(video.currentFrame))
 
 def scroll_to_end(sender):
   video.currentFrame=video.length-100
-  appView.loadImage(video.loadImage(video.currentFrame))
+  appView.loadImage(video.get_image(video.currentFrame))
 
 def btndown_save_settings(sender):
   settings.savesettings(settingsfile)
@@ -893,7 +893,7 @@ def processmidi():
   mf.addProgramChange(track, prefs.keyp_colors_channel[i], prefs.keyp_colors_channel_prog[i])
 
  print("starting from frame:" + str(prefs.startframe))
- video.getFrame( prefs.startframe )
+ video.get_frame( prefs.startframe )
  notecnt=0
  lastimage = video.image.copy()
  while video.success:
@@ -901,7 +901,7 @@ def processmidi():
   if (video.currentFrame % 10 == 0):
    glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
    if (video.currentFrame % 200 == 0):
-     appView.loadImage(video.loadImage(video.currentFrame))
+     appView.loadImage(video.get_image(video.currentFrame))
      lastimage = video.image.copy()
    #glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
    #glTexImage2D(GL_TEXTURE_2D, 0, 3, video_width, video_height, 0, GL_BGR, GL_UNSIGNED_BYTE, image )
@@ -1110,7 +1110,7 @@ def processmidi():
     cv2.imwrite("/tmp/frame%d.jpg" % video.currentFrame, video.image)  # save frame as JPEG file
 
 #  success,image = vidcap.read()
-  video.getFrame()
+  video.get_frame()
 
   video.currentFrame += 1
   framerate()
@@ -1160,7 +1160,7 @@ def reconstruct():
   print("""  processing time: {} / {} = {};  """.format( t1,t2, t2-t1 ))
 
   video.currentFrame = prefs.startframe
-  video.getFrame(video.currentFrame)
+  video.get_frame(video.currentFrame)
   showoutputpath = time.time() + 5
 
 
@@ -1218,8 +1218,8 @@ def main():
      elif event.type == pygame.KEYDOWN:
       for wnd in glwindows:
        wnd.update_key_down(event.key)
-
-#      print event.key
+       
+      #print event.key
       if event.key == pygame.K_q:
        if prefs.autoclose == 1:
          running = False
