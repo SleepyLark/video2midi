@@ -3,7 +3,9 @@ from video2midi.settings import *
 from video_io import VideoHandler
 from utils import *
 import os
-from cli import get_video_filepath
+from cli import get_video_filepath, get_ini_filepath
+from ui import MainWindow
+from midi_proc import MidiHandler
 
 import logging
 logger = logging.getLogger(__name__)
@@ -21,6 +23,7 @@ class AppController:
 
         self.outputmid = ntpath.basename(self.filepath) + '_output.mid'
         self.settingsfile = self.filepath + '.ini'
+        self.inifile = get_ini_filepath()
 
         self.video = VideoHandler(self.filepath)
         self.appView = MainWindow(self, self.video.video_width, self.video.video_height)

@@ -6,6 +6,11 @@ Handles argument parsing, file dialog, and video download via pytube.
 import sys
 import os
 import re
+from os.path import expanduser
+
+
+import logging
+logger = logging.getLogger(__name__)
 
 def get_video_filepath():
     """
@@ -24,9 +29,9 @@ def get_video_filepath():
                 ("All Files", "*.*")
             ))
             root.destroy()
-            print(f"get file [{filepath}]")
+            logger.debug(f"Get file [{filepath}]")
         else:
-            print("halt, no args")
+            logger.debug("Halt, no args")
             sys.exit(0)
     else:
         filepath = sys.argv[1]
@@ -39,7 +44,7 @@ def get_video_filepath():
         except ImportError:
             pass
         if has_pytube:
-            print(f"Downloading video by url: {filepath} ...")
+            logger.info(f"Downloading video by url: {filepath} ...")
             yt = YouTube(filepath)
             videos = [
                 {
@@ -52,13 +57,22 @@ def get_video_filepath():
             ]
             print(videos)
             videos = sorted(videos, key=lambda d: (-d['progressive'], -d['res']))
-            print('sorted by progressive (has video & audio in same file) and video resolution')
+            logger.debug('sorted by progressive (has video & audio in same file) and video resolution')
             for i in videos:
-                print(f'processing: {i}')
+                logger.info(f'processing: {i}')
                 filepath = f"{re.sub(r'[\W_]', '_', yt.title)}_{i['itag']}_{i['res']}.mp4"
                 yt.streams.get_by_itag(i['itag']).download("./", filepath, skip_existing=True)
                 break
         else:
-            print(f"file not exists [{filepath}], and no pytube has installed..., exit.")
+            logger.info(f"File does not exist [{filepath}], and pytube isn't installed. Exiting...")
             sys.exit(0)
     return filepath
+
+def get_ini_filepath():
+    home = expanduser("~")
+    inifile = os.path.join( home, '.v2m.ini')
+
+    if os.path.exists( 'v2m.ini' ):
+        inifile="v2m.ini"
+        logger.debug("local config file exists.")
+    return inifile
