@@ -2,7 +2,6 @@ from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
 from utils import v_rotate
-from controller import *
 
 class SettingsWindow(GLWindow):
     def __init__(self, app, x, y, w, h):
@@ -27,10 +26,10 @@ class SettingsWindow(GLWindow):
         self.root.appendChild( GLButton(260, 40 ,140,20,0    , [128,128,128], "set start frame"                   , self.app.set_start_frame_to_current_frame, hint = "s - hot key, (mods : shift + s, set processing start frame to the beginning)" ) )
         self.root.appendChild( GLButton(260+141, 40 ,140,20,0, [128,128,128], "set end frame"                     , self.app.set_end_frame_to_current_frame  , hint = "e - hot key, (mods : shift + e, set processing end frame to the ending)" ) )
 
-        notes_overlap_btn = GLButton(260, 80 ,140,20,0, [128,128,128],  "notes overlap"                     , self.app.switch_notes_overlap            , hint = "o - hot key", switch=1, switch_status=0)
-        ignore_notes_with_minimal_duration_btn = GLButton(260,100 ,272,20,0, [128,128,128],  "ignore notes with minimal duration", self.app.switch_ignore_notes_with_minimal_duration, hint = "i - hot key", switch=1, switch_status=0)
-        self.root.appendChild( notes_overlap_btn )
-        self.root.appendChild( ignore_notes_with_minimal_duration_btn )
+        self.notes_overlap_btn = GLButton(260, 80 ,140,20,0, [128,128,128],  "notes overlap"                     , self.app.switch_notes_overlap            , hint = "o - hot key", switch=1, switch_status=0)
+        self.ignore_notes_with_minimal_duration_btn = GLButton(260,100 ,272,20,0, [128,128,128],  "ignore notes with minimal duration", self.app.switch_ignore_notes_with_minimal_duration, hint = "i - hot key", switch=1, switch_status=0)
+        self.root.appendChild( self.notes_overlap_btn )
+        self.root.appendChild( self.ignore_notes_with_minimal_duration_btn )
 
         self.root.appendChild( GLButton(260+141, 80 ,140,20,0, [128,128,128],  "sync notes"                    , self.app.switch_sync_notes_start_pos     , hint = "sync notes start pos", switch=1, switch_status=0) )
         self.root.appendChild( GLButton(260,120 ,140,20,0, [128,128,128],  "resize window"                     , self.app.switch_resize_windows           , hint = "r - hot key") )

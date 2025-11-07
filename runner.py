@@ -1,7 +1,8 @@
 import logging
 from controller import AppController
 
-logging.basicConfig(level=logging.INFO)
+# change level to logging.INFO for deployment
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 logger.info("Starting app")

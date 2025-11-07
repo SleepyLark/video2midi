@@ -2,7 +2,6 @@ from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
 from utils import v_rotate
-from controller import *
 
 class ColorWindow(GLWindow):
     def __init__(self, app, x, y, w, h):

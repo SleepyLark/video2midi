@@ -2,7 +2,6 @@ from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
 from utils import v_rotate
-from controller import *
 
 class ExtraWindow(GLWindow):
     def __init__(self, app, x, y, w, h):
@@ -10,8 +9,8 @@ class ExtraWindow(GLWindow):
         self.root = self
         self.app = app
 
-        extra_label1 = GLLabel(6,0,  "Use alternate:"+str(prefs.use_alternate_keys)  )
-        self.root.appendChild( extra_label1 )
+        self.extra_label1 = GLLabel(6,0,  "Use alternate:"+str(prefs.use_alternate_keys)  )
+        self.root.appendChild( self.extra_label1 )
         extra_label3 = GLLabel( 6,90,  """to select the key press ctrl + left mouse button on the key rect.
 to deselect the key press ctrl + left mouse button on empty space.""" )
         self.root.appendChild( extra_label3 )

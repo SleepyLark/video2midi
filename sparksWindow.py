@@ -2,7 +2,6 @@ from video2midi.prefs import prefs
 from video2midi.settings import *
 from video2midi.views.gl import *
 from utils import v_rotate
-from controller import *
 
 class SparksWindow(GLWindow):
     def __init__(self, app, x, y, w, h):
@@ -12,22 +11,21 @@ class SparksWindow(GLWindow):
 
         self.addButtons()
         self.addSliders()
-        #TODO: FINISH MOVING METHODS TO CONTROLLER
 
     def addButtons(self):
-        sparks_switch = GLButton(313,24 ,100,22,1, [128,128,128], "use sparks" ,self.app.change_use_sparks,switch=1, switch_status=prefs.use_sparks )
-        self.root.appendChild( sparks_switch )
+        self.sparks_switch = GLButton(313,24 ,100,22,1, [128,128,128], "use sparks" ,self.app.change_use_sparks,switch=1, switch_status=prefs.use_sparks )
+        self.root.appendChild( self.sparks_switch )
 
         self.root.appendChild( GLButton(413   ,24 ,32,22,1, [96,96,128], "y+" ,self.app.update_sparks_y_pos, hint="move sparks higher") )
         self.root.appendChild( GLButton(413+33,24 ,32,22,1, [96,96,128], "y-" ,self.app.update_sparks_y_pos, hint="move sparks lower") )
         self.root.appendChild( GLLabel( 6,50,  "alt + up / down - move sparks label up or down " ))
 
-        use_percolor_delta = GLButton(313,100 ,190,22,1, [128,128,128], "use percolor sensitivity" ,self.app.change_use_percolor_delta,switch=1, switch_status=prefs.use_sparks )
-        self.root.appendChild( use_percolor_delta )
+        self.use_percolor_delta = GLButton(313,100 ,190,22,1, [128,128,128], "use percolor sensitivity" ,self.app.change_use_percolor_delta,switch=1, switch_status=prefs.use_sparks )
+        self.root.appendChild( self.use_percolor_delta )
 
     def addSliders(self):
-        sparks_slider_delta = GLSlider(6,25, 150,18, -50,150,50,self.app.update_sparks_delta, label="Sparks delta")
-        self.root.appendChild( sparks_slider_delta )
+        self.sparks_slider_delta = GLSlider(6,25, 150,18, -50,150,50,self.app.update_sparks_delta, label="Sparks delta")
+        self.root.appendChild( self.sparks_slider_delta )
 
         sparks_slider_height = GLSlider(160,25, 150,18, 1,60,1,None, label="Sparks height")
         sparks_slider_height.round=0

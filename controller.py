@@ -1,5 +1,5 @@
 from video2midi.prefs import prefs
-from video2midi.settings import *
+import video2midi.settings as settings
 from video_io import VideoHandler
 from utils import *
 import os
@@ -16,6 +16,7 @@ import time
 from os.path import expanduser
 from ui import *
 from midi_proc import *
+import pygame
 
 class AppController:
     def __init__(self):
@@ -25,8 +26,9 @@ class AppController:
         self.settingsfile = self.filepath + '.ini'
         self.inifile = get_ini_filepath()
 
+        self.midiHandler = MidiHandler()
         self.video = VideoHandler(self.filepath)
-        self.appView = MainWindow(self, self.video.video_width, self.video.video_height)
+        self.appView = MainWindow(self, self.filepath, self.video.video_width, self.video.video_height)
 
         self.endframe = self.video.length
         self.running = True
@@ -77,36 +79,33 @@ class AppController:
         endframe = self.video.get_current_frame_int()
         logger.debug(f"set end frame = {endframe}")
 
-    def switch_notes_overlap(sender):
-        if sender is None:
+    def switch_notes_overlap(self, sender):
             prefs.notes_overlap = not prefs.notes_overlap
-            notes_overlap_btn.switch_status = prefs.notes_overlap
-        else:
-            prefs.notes_overlap = notes_overlap_btn.switch_status
-    def switch_ignore_notes_with_minimal_duration(sender):
-        if sender is None:
-            prefs.ignore_minimal_duration = not prefs.ignore_minimal_duration
-            ignore_notes_with_minimal_duration_btn.switch_status = prefs.ignore_minimal_duration
-        else:
-            prefs.ignore_minimal_duration = ignore_notes_with_minimal_duration_btn.switch_status
-    
+            self.appView.toggle_notes_overlap()
+
+            
+    def switch_ignore_notes_with_minimal_duration(self, sender):
+        prefs.ignore_minimal_duration = not prefs.ignore_minimal_duration
+        self.appView.toggle_ignore_notes_minimal()
+
     def switch_sync_notes_start_pos(sender):
         prefs.sync_notes_start_pos = sender.switch_status
 
-    def switch_resize_windows(sender):
+    def switch_resize_windows(self, sender):
         prefs.resize = not prefs.resize
         self.appView.resize_window()
 
     def change_autoclose(sender):
         prefs.autoclose = sender.switch_status
 
-    def btndown_save_settings(sender):
-        self.settings.savesettings(settingsfile)
+    def btndown_save_settings(self, sender):
+        settings.savesettings(self.settingsfile)
 
-    def btndown_load_settings(sender):
+    def btndown_load_settings(self, sender):
         old_resize = prefs.resize
-        loadsettings( settingsfile )
-        update_alternate_label()
+        self.loadsettings(self.settingsfile)
+
+        self.appView.update_alternate_label()
         if (prefs.resize != old_resize):
             self.appView.resize_window()
 
@@ -119,38 +118,40 @@ class AppController:
     def change_save_to_disk_per_channel(sender):
         prefs.save_to_disk_per_channel = sender.switch_status
 
-    def raise_octave(*args):
+    def raise_octave(self, *args):
         prefs.octave += 1
         if (prefs.octave > 7): 
             prefs.octave = 7
-        midiHandler.basenote = prefs.octave * 12
+        self.midiHandler.basenote = prefs.octave * 12
     
-    def lower_octave(*args):
+    def lower_octave(self, *args):
         prefs.octave -= 1
         if (prefs.octave < 0): 
             prefs.octave = 0
-        midiHandler.basenote = prefs.octave * 12
+        self.midiHandler.basenote = prefs.octave * 12
 
     def scroll_by_steps(self, steps ):
         self.video.currentFrame += steps
+        
         if (self.video.currentFrame > self.video.length *0.99):
             self.video.currentFrame = math.trunc(self.video.length *0.99)
+        
         if (self.video.currentFrame < 1):
             self.video.currentFrame=1
         
         self.appView.loadImage(self.video.get_image(self.video.currentFrame))
 
-    def scroll_forward_by_frame(sender):
-        scroll_by_steps(1)
+    def scroll_forward_by_frame(self, sender):
+        self.scroll_by_steps(1)
 
-    def scroll_fast_forward(sender):
-        scroll_by_steps(100)
+    def scroll_fast_forward(self, sender):
+        self.scroll_by_steps(100)
 
-    def scroll_prev_by_frame(sender):
-        scroll_by_steps(-1)
+    def scroll_prev_by_frame(self, sender):
+        self.scroll_by_steps(-1)
 
-    def scroll_fast_prev(sender):
-        scroll_by_steps(-100)
+    def scroll_fast_prev(self, sender):
+        self.scroll_by_steps(-100)
 
     def scroll_to_start(self, sender):
         self.video.currentFrame=0
@@ -292,14 +293,9 @@ class AppController:
         if (lastkeygrabid != -1):
             readkeycolor(lastkeygrabid)
     
-    def change_use_alternate_keys(sender):
-        global extra_label1
+    def change_use_alternate_keys(self, sender):
         prefs.use_alternate_keys = not prefs.use_alternate_keys
-        update_alternate_label()
-
-    
-    def update_alternate_label():
-        extra_label1.text = "Use alternate:"+str(prefs.use_alternate_keys)
+        self.appView.update_alternate_label()
 
     def snap_notes_to_the_grid(sender):
         global use_snap_notes_to_grid
