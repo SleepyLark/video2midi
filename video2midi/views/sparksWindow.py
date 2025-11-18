@@ -1,7 +1,6 @@
-from video2midi.prefs import prefs
-from video2midi.settings import *
-from video2midi.views.gl import *
-from utils import v_rotate
+from ..prefs import prefs
+from ..settings import *
+from .gl import *
 
 class SparksWindow(GLWindow):
     def __init__(self, app, x, y, w, h):

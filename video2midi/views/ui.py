@@ -10,14 +10,14 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from pygame.locals import *
-from video2midi.prefs import prefs
-from video2midi.settings import *
-from video2midi.views.gl import *
-from settingsWindow import *
-from colorWindow import *
-from helpWindow import *
-from extraWindow import *
-from sparksWindow import *
+from ..prefs import prefs
+from ..settings import *
+from .gl import *
+from .settingsWindow import SettingsWindow
+from .colorWindow import ColorWindow
+from .extraWindow import ExtraWindow
+from .sparksWindow import SparksWindow 
+from .helpWindow import HelpWindow
 import cv2
 import time, math, os, ntpath
 
@@ -122,10 +122,12 @@ class MainWindow:
         try:
             rgb_image = image
             glTexImage2D(GL_TEXTURE_2D, 0, 3, self.defaultWidth, self.defaultHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
+            logger.debug("image loaded to 2D texture")
             return
         except Exception as E:
             error_on_load = True
             logger.exception(f"Can't load image from video to OpenGL: {E}")
+
         if error_on_load:
             rvideo_width, rvideo_height = 512, 512
             logger.debug(f"Trying resize video image to {rvideo_width}x{rvideo_height}")
@@ -144,6 +146,7 @@ class MainWindow:
     # UI widget/window setup, drawframe, and event loop will be moved here from v2m.py
     # Example stub for drawframe:
     def drawframe(self, lastimage=None):
+
         scale=1.0
 
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
@@ -183,10 +186,9 @@ class MainWindow:
         for window in self.glwindows:
             window.drawhint()
 
-    # Example stub for main event loop:
-    def main_event_loop():
-        # ... (event loop and window/widget setup from v2m.py)
-        pass  # Replace with actual code
+    def key_down_event(self, key):
+        for window in self.glwindows:
+            window.update_key_down(key)
 
     def get_colorBtn_list(self):
         return self.colorWindow.colorBtns

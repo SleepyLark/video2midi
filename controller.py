@@ -4,7 +4,7 @@ from video_io import VideoHandler
 from utils import *
 import os
 from cli import get_video_filepath, get_ini_filepath
-from ui import MainWindow
+from video2midi.views.ui import MainWindow
 from midi_proc import MidiHandler
 
 import logging
@@ -14,7 +14,6 @@ import math
 import ntpath
 import time
 from os.path import expanduser
-from ui import *
 from midi_proc import *
 import pygame
 
@@ -26,20 +25,37 @@ class AppController:
         self.settingsfile = self.filepath + '.ini'
         self.inifile = get_ini_filepath()
 
-        self.midiHandler = MidiHandler()
+        self.use_snap_notes_to_grid = False
+        self.line_height = 20
+
         self.video = VideoHandler(self.filepath)
         self.appView = MainWindow(self, self.filepath, self.video.video_width, self.video.video_height)
 
         self.endframe = self.video.length
         self.running = True
+        self.debug_keys = False
 
         # set starting image
         self.appView.loadImage(self.video.get_image())
         self.appView.fit_to_the_screen()
 
+        self.midiHandler = MidiHandler()
+
+        self.keygrab=0
+        self.keygrabid=-1
+        self.lastkeygrabid=-1
+        self.printed_for_frame=0
+
+        self.separate_note_id=-1
+
     def start(self):
+        mousex, mousey = pygame.mouse.get_pos()
+
+        self.loadsettings(self.inifile)
+
         while self.running:
             self.appView.drawframe()
+
             mods = pygame.key.get_mods()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -51,6 +67,160 @@ class AppController:
                     prefs.resize_width = event.w
                     prefs.resize_height = event.h
                     self.appView.resize_window()
+                elif event.type == pygame.KEYDOWN:
+                    self.appView.key_down_event(event.key)
+
+                    if event.key == pygame.K_q:
+                        if prefs.autoclose == 1:
+                            running = False
+                        else:
+                            #reconstruct()  
+                            pass
+
+                    if event.key == pygame.K_o:
+                        #prefs.notes_overlap = not prefs.notes_overlap
+                        self.switch_notes_overlap(None)      
+
+                    if event.key == pygame.K_i:
+                        #prefs.ignore_minimal_duration = not prefs.ignore_minimal_duration
+                        self.switch_ignore_notes_with_minimal_duration(None)
+
+                    if event.key == pygame.K_s:
+                        if mods & pygame.KMOD_SHIFT:
+                            prefs.startframe = 0
+                        else:
+                            prefs.startframe = self.video.get_current_frame_int()
+                            logger.debug("set start frame = "+ str(prefs.startframe))
+                    
+                    if event.key == pygame.K_e:
+                        if mods & pygame.KMOD_SHIFT:
+                            self.endframe = self.video.length
+                        else:
+                            self.endframe = self.video.get_current_frame_int()
+                            logger.debug("set end frame = "+ str(self.endframe))
+
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        pygame.quit()
+                        quit()
+
+                    if event.key == pygame.K_F2:
+                        self.btndown_save_settings(None)
+
+                    if event.key == pygame.K_F3:
+                        self.btndown_load_settings(None)
+
+                    # if event.key == pygame.K_F4:
+                        # for i in range(len(glwindows)):
+                            # glwindows[i].x = mousex
+                            # glwindows[i].y = mousey
+
+                    if event.key == pygame.K_r:
+                        self.switch_resize_windows(None)
+
+                    if event.key == pygame.K_RIGHTBRACKET:
+                        self.raise_octave()
+
+                    if event.key == pygame.K_LEFTBRACKET:
+                        self.lower_octave()
+
+                    if event.key == pygame.K_PLUS or event.key == pygame.K_KP_PLUS or event.key == pygame.K_EQUALS:
+                        prefs.keys_angle -= 5
+                        update_key_positions()
+
+                    if event.key == pygame.K_MINUS or event.key == pygame.K_KP_MINUS:
+                        prefs.keys_angle += 5
+                        update_key_positions()
+
+                    if event.key == pygame.K_UP:
+                        if mods & pygame.KMOD_ALT:
+                            prefs.keyp_spark_y_pos -= 1
+
+                        else:
+                            if mods & pygame.KMOD_SHIFT:
+                                prefs.yoffset_blackkeys -= 1
+                            else:
+                                prefs.yoffset_blackkeys -= 2
+                            update_key_positions( )
+
+                    if event.key == pygame.K_DOWN:
+                        if mods & pygame.KMOD_ALT:
+                            prefs.keyp_spark_y_pos += 1
+                        else:
+                            if mods & pygame.KMOD_SHIFT:
+                                prefs.yoffset_blackkeys += 1
+                            else:
+                                prefs.yoffset_blackkeys += 2
+                            update_key_positions( )
+
+                    if event.key == pygame.K_TAB:
+                        self.show_or_hide_all_windows(None)
+
+                    if event.key == pygame.K_LEFT:
+                        if mods & pygame.KMOD_SHIFT:
+                            prefs.whitekey_width-=0.1
+                        else:
+                            prefs.whitekey_width-=1.0
+                        update_key_positions( )
+
+                    if event.key == pygame.K_RIGHT:
+                        if mods & pygame.KMOD_SHIFT:
+                            prefs.whitekey_width+=0.1
+                        else:
+                            prefs.whitekey_width+=1.0
+                        update_key_positions( )
+
+                    if event.key == pygame.K_HOME:
+                        self.scroll_to_start(None)
+
+                    if event.key == pygame.K_END:
+                        self.scroll_to_end(None)
+
+                    if event.key == pygame.K_0:
+                        if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
+                            prefs.keyp_colors[Gl.keyp_colormap_id][0] = 0
+                            prefs.keyp_colors[Gl.keyp_colormap_id][1] = 0
+                            prefs.keyp_colors[Gl.keyp_colormap_id][2] = 0
+
+                    # if event.key == pygame.K_PAGEUP:
+                    #     if mods & pygame.KMOD_SHIFT:
+                    #         scroll_forward_by_frame(None)
+                    #     else:
+                    #         scroll_fast_forward(None)
+
+                    # if event.key == pygame.K_PAGEDOWN:
+                    #     if mods & pygame.KMOD_SHIFT:
+                    #         scroll_prev_by_frame(None)
+                    #     else:
+                    #         scroll_fast_prev(None)
+
+                    if event.key == pygame.K_p:
+                        size=5
+                        self.separate_note_id=-1
+                        for i in range( len( prefs.keys_pos) ):
+                            if (abs( mousex - (prefs.keys_pos[i][0] + prefs.xoffset_whitekeys) )< size) and (abs( mousey - (prefs.keys_pos[i][1] + prefs.yoffset_whitekeys) )< size):
+                                self.separate_note_id=i
+
+                    if event.key == pygame.K_KP4:
+                        if lastkeygrabid >0 and lastkeygrabid < len(prefs.keys_pos):
+                            prefs.keys_pos[lastkeygrabid][0] -= 1
+                    if event.key == pygame.K_KP6:
+                        if lastkeygrabid >0 and lastkeygrabid < len(prefs.keys_pos):
+                            prefs.keys_pos[lastkeygrabid][0] += 1
+                    if event.key == pygame.K_KP8:
+                        if lastkeygrabid >0 and lastkeygrabid < len(prefs.keys_pos):
+                            prefs.keys_pos[lastkeygrabid][1] -= 1
+                    if event.key == pygame.K_KP2:
+                        if lastkeygrabid >0 and lastkeygrabid < len(prefs.keys_pos):
+                            prefs.keys_pos[lastkeygrabid][1] += 1
+                            
+                    # if event.key == pygame.K_KP1:
+                    #     vertical_align_keys(1, 1)
+                    # if event.key == pygame.K_KP3:
+                    #     vertical_align_keys(1, 0)
+
+
+            pygame.display.flip()
 
     def loadsettings(self, cfgfile: str):
         settings.loadsettings(cfgfile)
@@ -258,7 +428,7 @@ class AppController:
             prefs.keyp_colors_channel[i] = 0
         colorWindow_colorBtns_channel_labels[i].text = "Ch:" + str(prefs.keyp_colors_channel[i]+1)
 
-    def disable_color(sender):
+    def disable_color(self, sender):
         print( 'disabled color...' +str(sender.index))
         if sender.index < len(prefs.keyp_colors):
             prefs.keyp_colors[ sender.index ] = [0,0,0]
@@ -268,18 +438,18 @@ class AppController:
         pix_x=int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
         pix_y=int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
 
-        if ( pix_x >= appView.width ) or ( pix_y >= appView.height ) or ( pix_x < 0 ) or ( pix_y < 0 ): return
+        if ( pix_x >= self.appView.width ) or ( pix_y >= self.appView.height ) or ( pix_x < 0 ) or ( pix_y < 0 ): return
         if ( prefs.resize == True ):
             og_pix_x=pix_x
             og_pix_y=pix_y
 
-            pix_x= int(round( pix_x * ( video.video_width / float(prefs.resize_width) )))
-            pix_y= int(round( pix_y * ( video.video_height / float(prefs.resize_height) )))
-            if ( pix_x > video.video_width -1 ): pix_x = video.video_width-1
-            if ( pix_y > video.video_height-1 ): pix_y= video.video_height-1
+            pix_x= int(round( pix_x * ( self.video.video_width / float(prefs.resize_width) )))
+            pix_y= int(round( pix_y * ( self.video.video_height / float(prefs.resize_height) )))
+            if ( pix_x > self.video.video_width -1 ): pix_x = self.video.video_width-1
+            if ( pix_y > self.video.video_height-1 ): pix_y = self.video.video_height-1
             #      print "original x:"+str(pixxo) + "x" +str(pixyo) + " mapped :" +str(pixx) +"x"+str(pixy)
 
-        key_BGR = video.image[pix_y,pix_x]
+        key_BGR = self.video.image[pix_y,pix_x]
         key=[ key_BGR[2], key_BGR[1],key_BGR[0] ]
 
         prefs.keyp_colors_alternate[i] = key
@@ -332,3 +502,14 @@ class AppController:
         if (Gl.keyp_colormap_id < len(prefs.percolor_delta)):
             prefs.percolor_delta[ Gl.keyp_colormap_id ] = sender.value
             #print("changed percolor delta for color with id ["+str(sender.id)+"] = "+ str(sender.value) )
+    
+    def update_line_height(self, sender,value):
+        self.line_height = value
+
+    def scroll_to_start(self,sender):
+        self.video.currentFrame=0
+        self.appView.loadImage(self.video.get_image())
+
+    def scroll_to_end(self,sender):
+        self.video.currentFrame=self.video.length-100
+        self.appView.loadImage(self.video.get_image())
