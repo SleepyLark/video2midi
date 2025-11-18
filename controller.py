@@ -415,14 +415,14 @@ class AppController:
         prefs.ignore_minimal_duration = not prefs.ignore_minimal_duration
         self.appView.toggle_ignore_notes_minimal()
 
-    def switch_sync_notes_start_pos(sender):
+    def switch_sync_notes_start_pos(self,sender):
         prefs.sync_notes_start_pos = sender.switch_status
 
     def switch_resize_windows(self, sender):
         prefs.resize = not prefs.resize
         self.appView.resize_window()
 
-    def change_autoclose(sender):
+    def change_autoclose(self,sender):
         prefs.autoclose = sender.switch_status
 
     def btndown_save_settings(self, sender):
@@ -436,13 +436,13 @@ class AppController:
         if prefs.resize != old_resize:
             self.appView.resize_window()
 
-    def change_rollcheck(sender):
+    def change_rollcheck(self, sender):
         prefs.rollcheck = sender.switch_status
 
-    def change_rollcheck_priority(sender):
+    def change_rollcheck_priority(self,sender):
         prefs.rollcheck_priority = sender.switch_status
 
-    def change_save_to_disk_per_channel(sender):
+    def change_save_to_disk_per_channel(self,sender):
         prefs.save_to_disk_per_channel = sender.switch_status
 
     def raise_octave(self, *args):
@@ -488,15 +488,15 @@ class AppController:
         self.video.currentFrame = self.video.length - 100
         self.appView.loadImage(self.video.get_image())
 
-    def rotate_cw(sender):
+    def rotate_cw(self,sender):
         prefs.keys_angle -= 5
         update_key_positions()
 
-    def rotate_ccw(sender):
+    def rotate_ccw(self,sender):
         prefs.keys_angle += 5
         update_key_positions()
 
-    def change_cnt(sender):
+    def change_cnt(self,sender):
         print("change count")
         update_key_positions(True)
 
@@ -525,14 +525,14 @@ class AppController:
     def halign(sender):
         AppController.vertical_align_keys(align=0)
 
-    def update_keys_pos_cnt(sender, value):
+    def update_keys_pos_cnt(self,sender, value):
         prefs.keys_pos_cnt = int(value)
 
-    def update_blackkey_relative_position(sender, value):
+    def update_blackkey_relative_position(self,sender, value):
         prefs.blackkey_relative_position = value * 0.001
         self.update_key_positions()
 
-    def update_sync_notes_start_pos_time_delta(sender, value):
+    def update_sync_notes_start_pos_time_delta(self,sender, value):
         prefs.sync_notes_start_pos_time_delta = value * 0.001
 
     def update_key_positions(append=False):
@@ -604,6 +604,7 @@ class AppController:
             prefs.keyp_colors_channel[i] = 15
         if prefs.keyp_colors_channel[i] < 0:
             prefs.keyp_colors_channel[i] = 0
+
         colorWindow_colorBtns_channel_labels[i].text = "Ch:" + str(
             prefs.keyp_colors_channel[i] + 1
         )
