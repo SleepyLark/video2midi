@@ -303,7 +303,7 @@ class AppController:
                         if pix_y > self.video.video_height - 1:
                             pix_y = self.video.video_height - 1
 
-                        print(
+                        logger.debug(
                             "original mouse x:"
                             + str(mouse_x)
                             + "x"
@@ -348,14 +348,14 @@ class AppController:
                     extra_slider1.setvalue(
                         prefs.keyp_colors_alternate_sensitivity[i]
                     )
-                    print("ok click found on : " + str(self.keygrabid))
+                    logger.debug("ok click found on : " + str(self.keygrabid))
                     break
         #              if ( button == 2 ):
         #                self.lastkeygrabid=-1
         if button == 3:
             self.keygrab = 2
             size = 5
-            print(
+            logger.debug(
                 "x offset "
                 + str(prefs.xoffset_whitekeys)
                 + " y offset: "
@@ -378,7 +378,7 @@ class AppController:
                 ):
                     self.keygrab = 2
                     self.keygrabaddx = prefs.keys_pos[i][0]
-                    print("ok click found on : " + str(self.keygrabid))
+                    logger.debug("ok click found on : " + str(self.keygrabid))
                     break
     
     def loadsettings(self, cfgfile: str):
@@ -504,16 +504,16 @@ class AppController:
         update_key_positions()
 
     def change_cnt(self,sender):
-        print("change count")
+        logger.debug("change count")
         update_key_positions(True)
 
-    def vertical_align_keys(separate_black_keys=1, align=1):
-        print(f"lastkeygrabid {lastkeygrabid}")
-        if lastkeygrabid < 0 or lastkeygrabid > len(prefs.keys_pos):
+    def vertical_align_keys(self, separate_black_keys=1, align=1):
+        logger.debug(f"lastkeygrabid {self.lastkeygrabid}")
+        if self.lastkeygrabid < 0 or self.lastkeygrabid > len(prefs.keys_pos):
             return
 
-        y = prefs.keys_pos[lastkeygrabid][align]
-        selected_black_key = is_black_key(lastkeygrabid)
+        y = prefs.keys_pos[self.lastkeygrabid][align]
+        selected_black_key = is_black_key(self.lastkeygrabid)
 
         for idx in range(len(prefs.keys_pos)):
             if separate_black_keys == 1:
@@ -526,16 +526,16 @@ class AppController:
             else:
                 prefs.keys_pos[idx][align] = y
 
-    def valign(sender):
-        AppController.vertical_align_keys(align=1)
+    def valign(self, sender):
+        self.vertical_align_keys(align=1)
 
-    def halign(sender):
-        AppController.vertical_align_keys(align=0)
+    def halign(self, sender):
+        self.vertical_align_keys(align=0)
 
-    def update_keys_pos_cnt(self,sender, value):
+    def update_keys_pos_cnt(self, sender, value):
         prefs.keys_pos_cnt = int(value)
 
-    def update_blackkey_relative_position(self,sender, value):
+    def update_blackkey_relative_position(self, sender, value):
         prefs.blackkey_relative_position = value * 0.001
         self.update_key_positions()
 
@@ -545,7 +545,7 @@ class AppController:
     def update_key_positions(append=False):
         current_x = 0
         if append:
-            print(f"clear keys, set to {prefs.keys_pos_cnt}")
+            logger.debug(f"clear keys, set to {prefs.keys_pos_cnt}")
             prefs.keys_pos = []
 
         for key_index in range(prefs.keys_pos_cnt):
@@ -590,7 +590,7 @@ class AppController:
             )
             prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
-    def onPallete_click(sender, index):
+    def onPallete_click(self, sender, index):
         selected_color_delta.color = sender.color
         if index < len(prefs.percolor_delta):
             selected_color_delta.setvalue(prefs.percolor_delta[index])
@@ -600,8 +600,8 @@ class AppController:
                 prefs.keyp_colors_sparks_sensitivity[Gl.keyp_colormap_id]
             )
 
-    def update_channels(sender):
-        print("update_channels..." + str(sender.index))
+    def update_channels(self, sender):
+        logger.debug("update_channels..." + str(sender.index))
         i = abs(sender.index) - 1
         if sender.index > 0:
             prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] + 1
@@ -617,12 +617,12 @@ class AppController:
         )
 
     def disable_color(self, sender):
-        print("disabled color..." + str(sender.index))
+        logger.debug("disabled color..." + str(sender.index))
         if sender.index < len(prefs.keyp_colors):
             prefs.keyp_colors[sender.index] = [0, 0, 0]
         #   prefs.keyp_colors_channel[i]= prefs.keyp_colors_channel[i] + 1
 
-    def readkeycolor(i):
+    def readkeycolor(self, i):
         pix_x = int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
         pix_y = int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
 
@@ -654,49 +654,48 @@ class AppController:
 
         prefs.keyp_colors_alternate[i] = key
 
-    def readcolors(sender):
+    def readcolors(self, sender):
         for i in range(len(prefs.keys_pos)):
-            readkeycolor(i)
+            self.readkeycolor(i)
 
-    def updatecolor(sender):
-        if lastkeygrabid != -1:
-            readkeycolor(lastkeygrabid)
+    def updatecolor(self, sender):
+        if self.lastkeygrabid != -1:
+            self.readkeycolor(self.lastkeygrabid)
 
     def change_use_alternate_keys(self, sender):
         prefs.use_alternate_keys = not prefs.use_alternate_keys
         self.appView.update_alternate_label()
 
-    def snap_notes_to_the_grid(sender):
+    def snap_notes_to_the_grid(self, sender):
         global use_snap_notes_to_grid
         use_snap_notes_to_grid = sender.switch_status
 
-    def update_alternate_sensitivity(sender, value):
-        global lastkeygrabid
-        if lastkeygrabid != -1:
-            prefs.keyp_colors_alternate_sensitivity[lastkeygrabid] = value
+    def update_alternate_sensitivity(self, sender, value):
+        if self.lastkeygrabid != -1:
+            prefs.keyp_colors_alternate_sensitivity[self.lastkeygrabid] = value
 
-    def change_use_sparks(sender):
+    def change_use_sparks(self, sender):
         prefs.use_sparks = sender.switch_status
 
     #   sender.text = "use sparks:"+str(use_sparks)
 
-    def update_sparks_y_pos(sender):
+    def update_sparks_y_pos(self, sender):
         if sender.text == "y+":
             prefs.keyp_spark_y_pos = prefs.keyp_spark_y_pos - 1
         else:
             prefs.keyp_spark_y_pos = prefs.keyp_spark_y_pos + 1
 
-    def update_sparks_delta(sender, value):
+    def update_sparks_delta(self, sender, value):
         if sender.id == -1:
             return
         if sender.id < len(prefs.keyp_colors):
             prefs.keyp_colors_sparks_sensitivity[sender.id] = sender.value
             # print("keyp_colors_sparks_sensitivity["+str(sender.id)+"] = "+ str(sender.value) )
 
-    def change_use_percolor_delta(sender):
+    def change_use_percolor_delta(self, sender):
         prefs.use_percolor_delta = sender.switch_status
 
-    def update_percolor_delta(sender, value):
+    def update_percolor_delta(self, sender, value):
         if Gl.keyp_colormap_id == -1:
             return
         if Gl.keyp_colormap_id < len(prefs.percolor_delta):
