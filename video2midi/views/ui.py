@@ -37,6 +37,8 @@ class MainWindow:
         self.currentImage = None
         self.screen = None
 
+        os.environ["SDL_VIDEO_CENTERED"] = "1"
+
         logger.debug("Initialize pygame")
         pygame.init()
         # Create an OpenGL-capable window BEFORE calling any OpenGL functions.
@@ -45,6 +47,7 @@ class MainWindow:
         self.screen = pygame.display.set_mode(
             (self.width, self.height), DOUBLEBUF | OPENGL | pygame.RESIZABLE
         )
+
         pygame.display.set_caption(project_name)
         # Now it's safe to initialize GL objects
         doinitGl()
@@ -59,7 +62,7 @@ class MainWindow:
             "",
             app.show_or_hide_all_windows,
             switch=1,
-            switch_status=0,
+            switch_status=False,
         )
         self.ShowHideButton.active = 2
 
@@ -74,6 +77,7 @@ class MainWindow:
         self.glwindows = []
 
         self.glwindows.append(self.ShowHideButton)
+        self.glwindows.append(self.helpWindow)
         self.glwindows.append(self.settingsWindow)
         self.glwindows.append(self.colorWindow)
         self.glwindows.append(self.extraWindow)
@@ -218,7 +222,7 @@ class MainWindow:
 
         for window in self.glwindows:
             window.draw()
-
+            
         # drawing hints over all windows
         for window in self.glwindows:
             window.drawhint()
@@ -250,18 +254,25 @@ class MainWindow:
     def mouse_move(self, mouse_x, mouse_y):
         for wnd in self.glwindows:
             wnd.update_mouse_move(mouse_x, mouse_y)
-   
+
     def get_colorBtn_list(self):
         return self.colorWindow.colorBtns
 
-    def toggle_windows(self):
-        self.ShowHideButton.switch_status = not self.ShowHideButton.switch_status
+    def flip_switch_on_keypress(sender):
+        sender.switch_status = not sender.switch_status
+
+    def draw_toggle_windows(self, sender=None):
 
         logger.debug("Hide all windows")
+
         for i in self.glwindows:
             # print("i.type =%s" % (str(type(i))) )
             if isinstance(i, GLWindow):
                 i.fullhidden = self.ShowHideButton.switch_status
+
+    def toggle_window_button(self):
+        # Functions that allow hotkeys for buttons need to manually flip button's switch status
+        self.ShowHideButton.switch_status = not self.ShowHideButton.switch_status
 
     def toggle_notes_overlap(self):
         self.settingsWindow.notes_overlap_btn.switch_status = (

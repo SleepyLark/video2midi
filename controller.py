@@ -396,8 +396,13 @@ class AppController:
             # reconstruct()
             pass
 
-    def show_or_hide_all_windows(self, sender):
-        self.appView.toggle_windows()
+
+# === UI link ===
+    def show_or_hide_all_windows(self, sender=None):
+        if sender is None:
+            self.appView.toggle_window_button()
+
+        self.appView.draw_toggle_windows()
 
     def set_start_frame_to_current_frame(self, sender):
         prefs.startframe = self.video.get_current_frame_int()
@@ -408,12 +413,14 @@ class AppController:
         logger.debug(f"set end frame = {endframe}")
 
     def switch_notes_overlap(self, sender):
+        if sender is None:
+            self.appView.toggle_notes_overlap()
         prefs.notes_overlap = not prefs.notes_overlap
-        self.appView.toggle_notes_overlap()
 
-    def switch_ignore_notes_with_minimal_duration(self, sender):
+    def switch_ignore_notes_with_minimal_duration(self, sender=None):
+        if sender is None:        
+            self.appView.toggle_ignore_notes_minimal()
         prefs.ignore_minimal_duration = not prefs.ignore_minimal_duration
-        self.appView.toggle_ignore_notes_minimal()
 
     def switch_sync_notes_start_pos(self,sender):
         prefs.sync_notes_start_pos = sender.switch_status
