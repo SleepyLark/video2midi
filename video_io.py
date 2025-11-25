@@ -63,11 +63,7 @@ class VideoHandler:
         self.get_frame(idframe)
         logger.debug(f"Load image from video {self.video_width}x{self.video_height} frame: {idframe}")
         
-        # For OpenGL texture upload, return RGB image
-        if self.convertCvtColor:
-            return cv2.cvtColor(self.image, self.COLOR_BGR2RGB)
-        else:
-            return self.image
+        return self.image
         
     def get_current_frame_int(self) -> int:
         return int(round(self.vidcap.get(cv2.CAP_PROP_POS_FRAMES)))

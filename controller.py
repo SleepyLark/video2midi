@@ -61,7 +61,6 @@ class AppController:
         while self.running:
             self.appView.drawframe()
             self.handle_events()
-            pygame.display.flip()
 
     def handle_events(self):
         mouse_x, mouse_y = pygame.mouse.get_pos()

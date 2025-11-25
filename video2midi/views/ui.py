@@ -30,11 +30,10 @@ class MainWindow:
     def __init__(self, app, project_name, width=640, height=480):
         self.app = app
 
-        self.width = width
-        self.height = height
         self.defaultWidth = width
         self.defaultHeight = height
         self.currentImage = None
+        self.renderedFrame = None
         self.screen = None
 
         os.environ["SDL_VIDEO_CENTERED"] = "1"
@@ -44,13 +43,17 @@ class MainWindow:
         # Create an OpenGL-capable window BEFORE calling any OpenGL functions.
         # This ensures an active GL context so gl* calls (like glPixelStorei)
         # inside doinitGl() won't raise GL_INVALID_OPERATION (1282).
-        self.screen = pygame.display.set_mode(
-            (self.width, self.height), DOUBLEBUF | OPENGL | pygame.RESIZABLE
-        )
+
+        self.width, self.height = self.get_best_window_size(width, height)
+
+        self.flags = pygame.RESIZABLE | pygame.OPENGL | pygame.DOUBLEBUF
+
+        self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
 
         pygame.display.set_caption(project_name)
         # Now it's safe to initialize GL objects
         doinitGl()
+        self.reshape()
 
         self.ShowHideButton = GLButton(
             0,
@@ -82,23 +85,101 @@ class MainWindow:
         self.glwindows.append(self.colorWindow)
         self.glwindows.append(self.extraWindow)
 
+        GenFontTexture()
+
+
+    def get_best_window_size(self,video_w, video_h, margin=120):
+        """
+        Returns an optimal window size:
+        - If the video's resolution is larger than the display area → use available display size.
+        - Else → use the video size.
+        """
+        # Get monitor resolution
+        display_info = pygame.display.Info()
+        screen_w, screen_h = display_info.current_w, display_info.current_h
+
+        # Work area: leave room for window borders, OS UI, etc.
+        work_w = screen_w - margin
+        work_h = screen_h - margin
+
+        # If video is SMALLER than work area → return video dimensions
+        if video_w <= work_w and video_h <= work_h:
+            return video_w, video_h
+
+        # Otherwise, scale to best fit while keeping aspect ratio
+        aspect = video_w / video_h
+
+        # Fit to width
+        scaled_w = work_w
+        scaled_h = int(work_w / aspect)
+
+        if scaled_h > work_h:
+            # Fit to height instead
+            scaled_h = work_h
+            scaled_w = int(work_h * aspect)
+
+        return scaled_w, scaled_h
+
     def fit_to_the_screen(self) -> None:
-        infoObject = pygame.display.Info()
-        if (self.width > infoObject.current_w) or (self.height > infoObject.current_h):
+        display_info = pygame.display.Info()
+        logger.debug(
+            f"Current window size:{display_info.current_w}x{display_info.current_h}"
+        )
+        if (self.width > display_info.current_w) or (
+            self.height > display_info.current_h
+        ):
             logger.debug("Try fit window to the screen...")
             logger.debug("Current window size: %sx%s" % (self.width, self.height))
             logger.debug(
                 "Current screen size: %sx%s"
-                % (infoObject.current_w, infoObject.current_h)
+                % (display_info.current_w, display_info.current_h)
             )
 
-            ratio = self.width / infoObject.current_w
+            ratio = self.width / display_info.current_w
             self.width = int(self.width / ratio * 0.9)
             self.height = int(self.height / ratio * 0.9)
 
             logger.debug("New window size: %sx%s" % (self.width, self.height))
 
-    def resize_window(self) -> None:
+    def doinit(self):
+        doinitGl()
+        GenFontTexture()
+        self.reshape()
+
+    def reshape(self):
+        """Resize viewport and draw current frame immediately."""
+        glViewport(0, 0, self.width, self.height)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glOrtho(0, self.width, self.height, 0, -1, 100)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        glDisable(GL_DEPTH_TEST)
+
+        # Draw current image if available
+        if self.currentImage is not None:
+            self._upload_texture_for_current_size()
+            self.drawframe()
+
+    def resize_window(self):
+        """Called when window size changes."""
+        logger.debug("Resizing...")
+        if prefs.resize:
+            self.width = prefs.resize_width
+            self.height = prefs.resize_height
+        else:
+            self.width = self.defaultWidth
+            self.height = self.defaultHeight
+            self.fit_to_the_screen()
+
+        # Recreate display with new size
+        self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
+        logger.debug("New window size: %sx%s" % (self.width, self.height))
+
+        # Update GL and redraw
+        self.doinit()
+
+    def old_resize_window(self) -> None:
         if prefs.resize:
             self.width = prefs.resize_width
             self.height = prefs.resize_height
@@ -107,10 +188,12 @@ class MainWindow:
             self.height = self.defaultHeight
             self.fit_to_the_screen()
         # Recreate display with new size and reinitialize GL state
-        self.screen = pygame.display.set_mode(
-            (self.width, self.height), DOUBLEBUF | OPENGL | pygame.RESIZABLE
-        )
+        pygame.display.set_mode((self.width, self.height), self.flags)
+
+        logger.debug("New window size: %sx%s" % (self.width, self.height))
+
         self.doinit()
+        
 
     def update_size(self) -> None:
         if prefs.resize == 1:
@@ -119,18 +202,33 @@ class MainWindow:
         else:
             self.fit_to_the_screen()
 
-    def new_loadImage(self, image):
-        if image is None:
+    def loadImage(self, image):
+        """Load a new video frame (full resolution)."""
+        if image is None or image.size == 0:
             return
         self.currentImage = image
-        rgb = np.ascontiguousarray(self.currentImage)
-        h, w = rgb.shape[:2]
+        self._upload_texture_for_current_size()
+
+    def _upload_texture_for_current_size(self):
+        """Resize original image to current window size and upload to OpenGL."""
+        img = self.currentImage
+        if img.shape[1] != self.width or img.shape[0] != self.height:
+            img = cv2.resize(img, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
+
+        rgb_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        rgb_image = np.ascontiguousarray(rgb_image)
+
         glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb)
-        logger.debug("image loaded")
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+        glTexImage2D(GL_TEXTURE_2D, 0, 3, rgb_image.shape[1], rgb_image.shape[0], 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
 
-    def loadImage(self, image):
+        self.renderedFrame = img
+        pygame.display.flip()  # Update immediately
+
+    def old_loadImage(self, image):
         # if running:
         #     video.getFrame(idframe)
         #     image = video.image
@@ -182,8 +280,8 @@ class MainWindow:
 
     def doinit(self):
         doinitGl()
-        self.loadImage(self.currentImage)
         GenFontTexture()
+        self.reshape()
 
     # UI widget/window setup, drawframe, and event loop will be moved here from v2m.py
     # Example stub for drawframe:
@@ -192,13 +290,6 @@ class MainWindow:
         scale = 1.0
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glViewport(0, 0, self.width, self.height)
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(0, self.width, self.height, 0, -1, 100)
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        glDisable(GL_DEPTH_TEST)
 
         glScale(scale, scale, 1)
         glColor4f(1.0, 1.0, 1.0, 1.0)
@@ -222,10 +313,12 @@ class MainWindow:
 
         for window in self.glwindows:
             window.draw()
-            
+
         # drawing hints over all windows
         for window in self.glwindows:
             window.drawhint()
+
+        pygame.display.flip()
 
     def key_down_event(self, key):
         for window in self.glwindows:
@@ -315,52 +408,3 @@ class MainWindow:
         self.sparksWindow.sparks_switch.switch_status = prefs.use_sparks
         self.sparksWindow.sparks_slider_delta.value = 0
         self.sparksWindow.sparks_slider_delta.id = -1
-
-    import time
-    from math import sin, cos, radians
-
-    def draw_test_pattern(self):
-        """Simple test: clear, draw background and a rotating colored quad, then flip."""
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glViewport(0, 0, self.width, self.height)
-
-        # Setup orthographic projection with origin at top-left (matches your drawframe)
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        glOrtho(0, self.width, self.height, 0, -1, 100)
-
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        glDisable(GL_DEPTH_TEST)
-
-        # Background
-        glDisable(GL_TEXTURE_2D)
-        glColor4f(0.12, 0.12, 0.12, 1.0)
-        DrawQuad(0, 0, self.width, self.height)
-
-        # Draw a rotating quad in the center
-        cx, cy = self.width // 2, self.height // 2
-        size = min(self.width, self.height) * 0.25
-        angle = (time.time() * 60) % 360  # degrees
-
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
-        glPushMatrix()
-        try:
-            glTranslatef(cx, cy, 0)
-            glRotatef(angle, 0, 0, 1)
-            glColor4f(0.2, 0.7, 1.0, 0.9)
-
-            # Draw quad centered at origin
-            half = size / 2
-            DrawQuad(-half, -half, size, size)
-        finally:
-            glPopMatrix()
-
-        # Draw a small static square at top-left to mimic a button
-        glColor4f(0.8, 0.3, 0.2, 1.0)
-        DrawQuad(10, 10, 40, 24)
-
-        # Present
-        pygame.display.flip()
