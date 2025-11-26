@@ -58,6 +58,7 @@ class VideoHandler:
         return self.success, self.image
 
     def get_image(self, idframe=130):
+        """image is a NumPy array with the shape [height, width, channels]"""
         if self.image is None:
             return None
         self.get_frame(idframe)

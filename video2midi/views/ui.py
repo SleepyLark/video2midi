@@ -27,11 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow:
-    def __init__(self, app, project_name, width=640, height=480):
+    def __init__(self, app, project_name, first_frame):
         self.app = app
 
-        self.defaultWidth = width
-        self.defaultHeight = height
+        frame_w = first_frame.shape[1]
+        frame_h = first_frame.shape[0]
+        self.defaultWidth = frame_w
+        self.defaultHeight = frame_h
         self.currentImage = None
         self.renderedFrame = None
         self.screen = None
@@ -44,7 +46,7 @@ class MainWindow:
         # This ensures an active GL context so gl* calls (like glPixelStorei)
         # inside doinitGl() won't raise GL_INVALID_OPERATION (1282).
 
-        self.width, self.height = self.get_best_window_size(width, height)
+        self.width, self.height = self.get_best_window_size(frame_w, frame_h)
 
         self.flags = pygame.RESIZABLE | pygame.OPENGL | pygame.DOUBLEBUF
 
@@ -53,7 +55,9 @@ class MainWindow:
         pygame.display.set_caption(project_name)
         # Now it's safe to initialize GL objects
         doinitGl()
-        self.reshape()
+        self.reshape(self.width, self.height)
+        self.loadImage(first_frame)
+
 
         self.ShowHideButton = GLButton(
             0,
@@ -86,8 +90,7 @@ class MainWindow:
         self.glwindows.append(self.extraWindow)
 
         GenFontTexture()
-
-
+        
     def get_best_window_size(self,video_w, video_h, margin=120):
         """
         Returns an optimal window size:
@@ -120,197 +123,130 @@ class MainWindow:
 
         return scaled_w, scaled_h
 
-    def fit_to_the_screen(self) -> None:
-        display_info = pygame.display.Info()
-        logger.debug(
-            f"Current window size:{display_info.current_w}x{display_info.current_h}"
-        )
-        if (self.width > display_info.current_w) or (
-            self.height > display_info.current_h
-        ):
-            logger.debug("Try fit window to the screen...")
-            logger.debug("Current window size: %sx%s" % (self.width, self.height))
-            logger.debug(
-                "Current screen size: %sx%s"
-                % (display_info.current_w, display_info.current_h)
-            )
+    def get_aspect_fit_size(self, src_w, src_h, dst_w, dst_h):
+        """Return (draw_w, draw_h, offset_x, offset_y) so the source fits in the
+        destination rectangle while keeping aspect ratio."""
+        src_aspect = src_w / src_h
+        dst_aspect = dst_w / dst_h
 
-            ratio = self.width / display_info.current_w
-            self.width = int(self.width / ratio * 0.9)
-            self.height = int(self.height / ratio * 0.9)
+        if src_aspect > dst_aspect:
+            # limited by width
+            draw_w = dst_w
+            draw_h = int(dst_w / src_aspect)
+        else:
+            # limited by height
+            draw_h = dst_h
+            draw_w = int(dst_h * src_aspect)
 
-            logger.debug("New window size: %sx%s" % (self.width, self.height))
+        offset_x = (dst_w - draw_w) // 2
+        offset_y = (dst_h - draw_h) // 2
+
+        return draw_w, draw_h, offset_x, offset_y
 
     def doinit(self):
         doinitGl()
         GenFontTexture()
         self.reshape()
 
-    def reshape(self):
-        """Resize viewport and draw current frame immediately."""
-        glViewport(0, 0, self.width, self.height)
+    def reshape(self, w=None, h=None):
+        """Update OpenGL viewport / projection when the window size changes."""
+        if w is None:
+            w = self.width
+        if h is None:
+            h = self.height
+
+        self.width = w
+        self.height = h
+
+        glViewport(0, 0, w, h)
+
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        glOrtho(0, self.width, self.height, 0, -1, 100)
+        glOrtho(0, w, h, 0, -1, 1)
+
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
-        glDisable(GL_DEPTH_TEST)
-
-        # Draw current image if available
-        if self.currentImage is not None:
-            self._upload_texture_for_current_size()
-            self.drawframe()
 
     def resize_window(self):
-        """Called when window size changes."""
-        logger.debug("Resizing...")
-        if prefs.resize:
-            self.width = prefs.resize_width
-            self.height = prefs.resize_height
-        else:
-            self.width = self.defaultWidth
-            self.height = self.defaultHeight
-            self.fit_to_the_screen()
+        """Toggle between user-defined size and auto-fit size."""
+        logger.debug("Resizing window...")
 
-        # Recreate display with new size
+        self.update_size()
         self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
-        logger.debug("New window size: %sx%s" % (self.width, self.height))
 
-        # Update GL and redraw
-        self.doinit()
+        logger.debug(f"Window resized to: {self.width}x{self.height}")
 
-    def old_resize_window(self) -> None:
-        if prefs.resize:
-            self.width = prefs.resize_width
-            self.height = prefs.resize_height
-        else:
-            self.width = self.defaultWidth
-            self.height = self.defaultHeight
-            self.fit_to_the_screen()
-        # Recreate display with new size and reinitialize GL state
-        pygame.display.set_mode((self.width, self.height), self.flags)
-
-        logger.debug("New window size: %sx%s" % (self.width, self.height))
-
-        self.doinit()
-        
+        # Update OpenGL viewport & projection
+        self.reshape()        
 
     def update_size(self) -> None:
-        if prefs.resize == 1:
-            self.width = prefs.resize_width
-            self.height = prefs.resize_height
+        if prefs.resize:
+            # User-selected fixed size
+            new_w = prefs.resize_width
+            new_h = prefs.resize_height
+            logger.debug(f"Prefs resize -> {new_w}x{new_h}")
         else:
-            self.fit_to_the_screen()
+            # Default to project video size, but fit to screen safely
+            new_w = self.defaultWidth
+            new_h = self.defaultHeight
+            logger.debug(f"Default video size -> {new_w}x{new_h}")
+
+            # Shrink if it would exceed desktop size
+            best_w, best_h = self.get_best_window_size(new_w, new_h)
+            new_w, new_h = best_w, best_h
+            logger.debug(f"Fitted to screen -> {new_w}x{new_h}")
+
+        # Apply the resize
+        self.width, self.height = new_w, new_h
 
     def loadImage(self, image):
-        """Load a new video frame (full resolution)."""
-        if image is None or image.size == 0:
-            return
+        """Upload the video frame to the GPU as a texture without resizing it."""
         self.currentImage = image
-        self._upload_texture_for_current_size()
-
-    def _upload_texture_for_current_size(self):
-        """Resize original image to current window size and upload to OpenGL."""
-        img = self.currentImage
-        if img.shape[1] != self.width or img.shape[0] != self.height:
-            img = cv2.resize(img, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
-
-        rgb_image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        rgb_image = np.ascontiguousarray(rgb_image)
+        self.tex_w = image.shape[1]
+        self.tex_h = image.shape[0]
 
         glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
-        glTexImage2D(GL_TEXTURE_2D, 0, 3, rgb_image.shape[1], rgb_image.shape[0], 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
 
-        self.renderedFrame = img
-        pygame.display.flip()  # Update immediately
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    def old_loadImage(self, image):
-        # if running:
-        #     video.getFrame(idframe)
-        #     image = video.image
-        self.currentImage = image
-        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
-        error_on_load = False
-        try:
-            rgb_image = image
-            glTexImage2D(
-                GL_TEXTURE_2D,
-                0,
-                3,
-                self.defaultWidth,
-                self.defaultHeight,
-                0,
-                GL_RGB,
-                GL_UNSIGNED_BYTE,
-                rgb_image,
-            )
-            logger.debug("image loaded to 2D texture")
-            return
-        except Exception as E:
-            error_on_load = True
-            logger.exception(f"Can't load image from video to OpenGL: {E}")
-
-        if error_on_load:
-            rvideo_width, rvideo_height = 512, 512
-            logger.debug(f"Trying resize video image to {rvideo_width}x{rvideo_height}")
-            try:
-                rimage = cv2.resize(image, (rvideo_width, rvideo_height))
-                rgb_image = cv2.cvtColor(rimage, cv2.COLOR_BGR2RGB)
-                glTexImage2D(
-                    GL_TEXTURE_2D,
-                    0,
-                    3,
-                    rvideo_width,
-                    rvideo_height,
-                    0,
-                    GL_RGB,
-                    GL_UNSIGNED_BYTE,
-                    rgb_image,
-                )
-            except Exception as E:
-                logger.exception(f"Can't load image from video to OpenGL: {E}")
-
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                    self.tex_w, self.tex_h,
+                    0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
+        
     def doinit(self):
         doinitGl()
         GenFontTexture()
         self.reshape()
 
-    # UI widget/window setup, drawframe, and event loop will be moved here from v2m.py
-    # Example stub for drawframe:
-    def drawframe(self, lastimage=None):
+    def drawframe(self):
+        if self.currentImage is None:
+            return
 
-        scale = 1.0
+        glClear(GL_COLOR_BUFFER_BIT)
+        glLoadIdentity()
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        draw_w, draw_h, off_x, off_y = self.get_aspect_fit_size(
+            self.tex_w, self.tex_h,
+            self.width, self.height
+        )
 
-        glScale(scale, scale, 1)
-        glColor4f(1.0, 1.0, 1.0, 1.0)
-
+        # ------------------------------------------------------------------
+        # 2. Draw the background image using the fitted rectangle
+        # ------------------------------------------------------------------
         glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-        glEnable(GL_TEXTURE_2D)
-        DrawQuad(0, 0, self.width, self.height)
+        glColor4f(1, 1, 1, 1)
 
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        # Draw JUST the fitted quad, not the entire window
+        DrawQuad(off_x, off_y, off_x + draw_w, off_y + draw_h)
 
+        # ------------------------------------------------------------------
+        # 3. Draw overlays/UI
+        # ------------------------------------------------------------------
         glColor4f(1.0, 0.5, 1.0, 0.5)
-
-        glPushMatrix()
-        glTranslatef(prefs.xoffset_whitekeys, prefs.yoffset_whitekeys, 0)
-        glDisable(GL_TEXTURE_2D)
-        glPopMatrix()
-
-        glDisable(GL_BLEND)
-        glDisable(GL_TEXTURE_2D)
-
         for window in self.glwindows:
             window.draw()
 
@@ -318,7 +254,19 @@ class MainWindow:
         for window in self.glwindows:
             window.drawhint()
 
+        glPushMatrix()
+        glTranslatef(prefs.xoffset_whitekeys, prefs.yoffset_whitekeys, 0)
+
+        glDisable(GL_TEXTURE_2D)
+        # draw your white-key outlines/shapes here
+
+        glEnable(GL_TEXTURE_2D)
+
+        glPopMatrix()
+
         pygame.display.flip()
+
+    # === UI cosmetic changes and handlers ===
 
     def key_down_event(self, key):
         for window in self.glwindows:

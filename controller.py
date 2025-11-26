@@ -33,16 +33,12 @@ class AppController:
 
         self.video = VideoHandler(self.filepath)
         self.appView = MainWindow(
-            self, self.filepath, self.video.video_width, self.video.video_height
+            self, self.filepath, self.video.get_image()
         )
 
         self.endframe = self.video.length
         self.running = True
         self.debug_keys = False
-
-        # set starting image
-        self.appView.loadImage(self.video.get_image())
-        self.appView.fit_to_the_screen()
 
         self.midiHandler = MidiHandler()
 
@@ -59,8 +55,8 @@ class AppController:
         self.loadsettings(self.inifile)
 
         while self.running:
-            self.appView.drawframe()
             self.handle_events()
+            self.appView.drawframe()
 
     def handle_events(self):
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -75,7 +71,7 @@ class AppController:
                 prefs.resize = 1
                 prefs.resize_width = event.w
                 prefs.resize_height = event.h
-                self.appView.resize_window()
+                self.appView.reshape(event.w, event.h)
             elif event.type == pygame.KEYDOWN:
                 self.keyboard_event(event.key)
             elif event.type == pygame.MOUSEBUTTONUP:
@@ -386,7 +382,7 @@ class AppController:
 
         self.appView.loadImage(self.video.get_image(prefs.startframe))
         self.appView.update_values_from_settings()
-        self.appView.update_size()
+        self.appView.resize_window()
 
     def start_recreate_midi(self, sender):
         if prefs.autoclose == 1:

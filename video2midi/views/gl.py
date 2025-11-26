@@ -22,6 +22,31 @@ class Gl:
 	keyp_colormap_id=-1
 
 def doinitGl() -> None:
+    # Reset GL-managed objects
+    Gl.listQuad1 = -1
+    for fnt in fonts:
+        fnt.gllistid = -1
+
+    # Ensure unpack alignment for image uploads
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+
+    # Basic GL setup
+    glEnable(GL_TEXTURE_2D)
+    glDisable(GL_DEPTH_TEST)
+    glClearColor(0.0, 0.0, 0.0, 1.0)
+
+    # Create textures
+    Gl.bgImgGL = glGenTextures(1)
+    Gl.fontTexture = glGenTextures(1)
+
+    # Setup background texture parameters
+    glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+
+def old_doinitGl() -> None:
 	Gl.listQuad1=-1
 	for fnt in fonts:
 		fnt.gllistid = -1
