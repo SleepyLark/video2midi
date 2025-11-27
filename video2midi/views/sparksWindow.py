@@ -30,6 +30,6 @@ class SparksWindow(GLWindow):
         sparks_slider_height.round=0
         self.root.appendChild( sparks_slider_height )
 
-        selected_color_delta = GLSlider(6,100, 200,18, 0,130,50,self.app.update_percolor_delta, label="percolor sensitivity")
-        selected_color_delta.round=1
-        self.root.appendChild( selected_color_delta )
+        self.selected_color_delta = GLSlider(6,100, 200,18, 0,130,50,self.app.update_percolor_delta, label="percolor sensitivity")
+        self.selected_color_delta.round=1
+        self.root.appendChild( self.selected_color_delta )

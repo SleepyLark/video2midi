@@ -340,9 +340,7 @@ class AppController:
                     if not (mods & pygame.KMOD_CTRL):
                         self.keygrabid = i
                     self.lastkeygrabid = i
-                    extra_slider1.setvalue(
-                        prefs.keyp_colors_alternate_sensitivity[i]
-                    )
+                    self.appView.update_alternate_sensitivity(prefs.keyp_colors_alternate_sensitivity[i])
                     logger.debug("ok click found on : " + str(self.keygrabid))
                     break
         #              if ( button == 2 ):
@@ -484,11 +482,11 @@ class AppController:
 
     def scroll_to_start(self, sender):
         self.video.currentFrame = 0
-        self.appView.loadImage(self.video.get_image())
+        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
 
     def scroll_to_end(self, sender):
         self.video.currentFrame = self.video.length - 100
-        self.appView.loadImage(self.video.get_image())
+        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
 
     def rotate_cw(self,sender):
         prefs.keys_angle -= 5
@@ -586,30 +584,12 @@ class AppController:
             prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
     def onPallete_click(self, sender, index):
-        selected_color_delta.color = sender.color
-        if index < len(prefs.percolor_delta):
-            selected_color_delta.setvalue(prefs.percolor_delta[index])
-            sparks_slider_delta.id = Gl.keyp_colormap_id
-            sparks_slider_delta.color = prefs.keyp_colors[Gl.keyp_colormap_id]
-            sparks_slider_delta.setvalue(
-                prefs.keyp_colors_sparks_sensitivity[Gl.keyp_colormap_id]
-            )
+        self.appView.update_selected_color_delta(sender, index)
 
     def update_channels(self, sender):
         logger.debug("update_channels..." + str(sender.index))
-        i = abs(sender.index) - 1
-        if sender.index > 0:
-            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] + 1
-        else:
-            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] - 1
-        if prefs.keyp_colors_channel[i] > 15:
-            prefs.keyp_colors_channel[i] = 15
-        if prefs.keyp_colors_channel[i] < 0:
-            prefs.keyp_colors_channel[i] = 0
-
-        colorWindow_colorBtns_channel_labels[i].text = "Ch:" + str(
-            prefs.keyp_colors_channel[i] + 1
-        )
+        self.appView.update_color_channels(self, sender)
+        
 
     def disable_color(self, sender):
         logger.debug("disabled color..." + str(sender.index))
@@ -699,11 +679,3 @@ class AppController:
 
     def update_line_height(self, sender, value):
         self.line_height = value
-
-    def scroll_to_start(self, sender):
-        self.video.currentFrame = 0
-        self.appView.loadImage(self.video.get_image())
-
-    def scroll_to_end(self, sender):
-        self.video.currentFrame = self.video.length - 100
-        self.appView.loadImage(self.video.get_image())

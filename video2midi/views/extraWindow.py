@@ -24,8 +24,8 @@ to deselect the key press ctrl + left mouse button on empty space.""" )
         self.root.appendChild( GLButton(265,45 ,155,22,1, [96 ,96 ,128], "snap notes to grid" ,self.app.snap_notes_to_the_grid,switch=1, switch_status=self.app.use_snap_notes_to_grid) )
 
     def addSliders(self):
-        extra_slider1 = GLSlider(6,65, 240,18, -100,100,0,self.app.update_alternate_sensitivity, label="Selected key sensitivity")
-        self.appendChild(extra_slider1)
+        self.extra_slider1 = GLSlider(6,65, 240,18, -100,100,0,self.app.update_alternate_sensitivity, label="Selected key sensitivity")
+        self.appendChild(self.extra_slider1)
 
         #TODO FIGURE OUT WHERE LINE_HEIGHT GOES
         extraWindow_slider2 = GLSlider(5,155, 240,18, 0,2000, self.app.line_height, self.app.update_line_height, label="length of vertical key lines")

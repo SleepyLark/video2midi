@@ -324,11 +324,40 @@ class MainWindow:
         self.settingsWindow.ignore_notes_with_minimal_duration_btn.switch_status = (
             not self.settingsWindow.ignore_notes_with_minimal_duration_btn.switch_status
         )
+    
+    def update_selected_color_delta(self, sender, index):
+        self.sparksWindow.selected_color_delta.color = sender.color
+
+        if index < len(prefs.percolor_delta):
+            self.sparksWindow.selected_color_delta.setvalue(prefs.percolor_delta[index])
+            self.sparksWindow.sparks_slider_delta.id = Gl.keyp_colormap_id
+            self.sparksWindow.sparks_slider_delta.color = prefs.keyp_colors[Gl.keyp_colormap_id]
+            self.sparksWindow.sparks_slider_delta.setvalue(
+                prefs.keyp_colors_sparks_sensitivity[Gl.keyp_colormap_id]
+            )
+
+    def update_color_channels(self, sender):
+        i = abs(sender.index) - 1
+        if sender.index > 0:
+            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] + 1
+        else:
+            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] - 1
+        if prefs.keyp_colors_channel[i] > 15:
+            prefs.keyp_colors_channel[i] = 15
+        if prefs.keyp_colors_channel[i] < 0:
+            prefs.keyp_colors_channel[i] = 0
+
+        self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(
+            prefs.keyp_colors_channel[i] + 1
+        )
 
     def update_alternate_label(self):
         self.extraWindow.extra_label1.text = "Use alternate:" + str(
             prefs.use_alternate_keys
         )
+
+    def update_alternate_sensitivity(self, new_value):
+        self.extraWindow.extra_slider1.setvalue(new_value)
 
     def update_values_from_settings(self):
         if len(self.colorWindow.colorBtns_channel_labels) > 0:
