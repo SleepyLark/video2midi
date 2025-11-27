@@ -74,7 +74,7 @@ class MainWindow:
         self.ShowHideButton.active = 2
 
         logger.debug("Creating subwindows")
-        self.settingsWindow = SettingsWindow(self.app, 24 + 275, 80, 550, 380)
+        self.settingsWindow = SettingsWindow(self.app, 24 + 275, 80, 500, 380)
         wh = ((len(prefs.keyp_colors) // 2) + 2) * 24 - 24
         self.colorWindow = ColorWindow(self.app, 24, 50, 274, wh)
         self.helpWindow = HelpWindow(self.app, 24 + 270, 50, 750, 535)
@@ -337,12 +337,12 @@ class MainWindow:
                     prefs.keyp_colors_channel[i] + 1
                 )
 
-        self.settingsWindow.key_sensitivity_slider.setvalue(prefs.keyp_delta)
-        self.settingsWindow.minimal_duration_slider.setvalue(
+        self.settingsWindow.key_sensitivity_slider.set_and_callback(prefs.keyp_delta)
+        self.settingsWindow.minimal_duration_slider.set_and_callback(
             prefs.minimal_duration * 100
         )
-        self.settingsWindow.tempo_slider.setvalue(prefs.tempo)
-        self.settingsWindow.key_count_slider.setvalue(prefs.keys_pos_cnt)
+        self.settingsWindow.tempo_slider.set_and_callback(prefs.tempo)
+        self.settingsWindow.key_count_slider.set_and_callback(prefs.keys_pos_cnt)
         self.settingsWindow.rollcheck_button.switch_status = prefs.rollcheck
         self.settingsWindow.rollcheck_priority_button.switch_status = (
             prefs.rollcheck_priority
