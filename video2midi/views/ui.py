@@ -3,8 +3,6 @@ ui.py - Pygame/OpenGL UI and widget logic for video2midi
 Handles window creation, event loop, and drawing routines.
 """
 
-# UI logic will be moved here from v2m.py
-
 import pygame
 import numpy as np
 from OpenGL.GL import *
@@ -42,34 +40,21 @@ class MainWindow:
 
         logger.debug("Initialize pygame")
         pygame.init()
-        # Create an OpenGL-capable window BEFORE calling any OpenGL functions.
-        # This ensures an active GL context so gl* calls (like glPixelStorei)
-        # inside doinitGl() won't raise GL_INVALID_OPERATION (1282).
-
+        
         self.width, self.height = self.get_best_window_size(frame_w, frame_h)
-
         self.flags = pygame.RESIZABLE | pygame.OPENGL | pygame.DOUBLEBUF
-
         self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
-
         pygame.display.set_caption(project_name)
+        
         # Now it's safe to initialize GL objects
         doinitGl()
         self.reshape(self.width, self.height)
         self.loadImage(first_frame)
 
-
         self.ShowHideButton = GLButton(
-            0,
-            0,
-            13,
-            13,
-            1,
-            [128, 128, 128],
-            "",
+            0, 0, 13, 13, 1, [128, 128, 128], "",
             app.show_or_hide_all_windows,
-            switch=1,
-            switch_status=False,
+            switch=1, switch_status=False,
         )
         self.ShowHideButton.active = 2
 
@@ -81,60 +66,47 @@ class MainWindow:
         self.extraWindow = ExtraWindow(self.app, 24 + 270 + 550 + 6, 80, 510, 250)
         self.sparksWindow = SparksWindow(self.app, 24 + 270 + 550 + 6, 300, 510, 185)
 
-        self.glwindows = []
-
-        self.glwindows.append(self.ShowHideButton)
-        self.glwindows.append(self.helpWindow)
-        self.glwindows.append(self.settingsWindow)
-        self.glwindows.append(self.colorWindow)
-        self.glwindows.append(self.extraWindow)
+        self.glwindows = [
+            self.ShowHideButton,
+            self.helpWindow,
+            self.settingsWindow,
+            self.colorWindow,
+            self.extraWindow,
+            self.sparksWindow,
+        ]
 
         GenFontTexture()
         
-    def get_best_window_size(self,video_w, video_h, margin=120):
-        """
-        Returns an optimal window size:
-        - If the video's resolution is larger than the display area → use available display size.
-        - Else → use the video size.
-        """
-        # Get monitor resolution
+    def get_best_window_size(self, video_w, video_h, margin=120):
+        """Returns optimal window size based on video and display dimensions."""
         display_info = pygame.display.Info()
         screen_w, screen_h = display_info.current_w, display_info.current_h
 
-        # Work area: leave room for window borders, OS UI, etc.
         work_w = screen_w - margin
         work_h = screen_h - margin
 
-        # If video is SMALLER than work area → return video dimensions
         if video_w <= work_w and video_h <= work_h:
             return video_w, video_h
 
-        # Otherwise, scale to best fit while keeping aspect ratio
         aspect = video_w / video_h
-
-        # Fit to width
         scaled_w = work_w
         scaled_h = int(work_w / aspect)
 
         if scaled_h > work_h:
-            # Fit to height instead
             scaled_h = work_h
             scaled_w = int(work_h * aspect)
 
         return scaled_w, scaled_h
 
     def get_aspect_fit_size(self, src_w, src_h, dst_w, dst_h):
-        """Return (draw_w, draw_h, offset_x, offset_y) so the source fits in the
-        destination rectangle while keeping aspect ratio."""
+        """Return (draw_w, draw_h, offset_x, offset_y) for aspect-fit rendering."""
         src_aspect = src_w / src_h
         dst_aspect = dst_w / dst_h
 
         if src_aspect > dst_aspect:
-            # limited by width
             draw_w = dst_w
             draw_h = int(dst_w / src_aspect)
         else:
-            # limited by height
             draw_h = dst_h
             draw_w = int(dst_h * src_aspect)
 
@@ -142,11 +114,6 @@ class MainWindow:
         offset_y = (dst_h - draw_h) // 2
 
         return draw_w, draw_h, offset_x, offset_y
-
-    def doinit(self):
-        doinitGl()
-        GenFontTexture()
-        self.reshape()
 
     def reshape(self, w=None, h=None):
         """Update OpenGL viewport / projection when the window size changes."""
@@ -159,48 +126,38 @@ class MainWindow:
         self.height = h
 
         glViewport(0, 0, w, h)
-
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         glOrtho(0, w, h, 0, -1, 1)
-
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
     def resize_window(self):
         """Toggle between user-defined size and auto-fit size."""
         logger.debug("Resizing window...")
-
         self.update_size()
         self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
-
         logger.debug(f"Window resized to: {self.width}x{self.height}")
-
-        # Update OpenGL viewport & projection
-        self.reshape()        
+        self.reshape()
 
     def update_size(self) -> None:
         if prefs.resize:
-            # User-selected fixed size
             new_w = prefs.resize_width
             new_h = prefs.resize_height
             logger.debug(f"Prefs resize -> {new_w}x{new_h}")
         else:
-            # Default to project video size, but fit to screen safely
             new_w = self.defaultWidth
             new_h = self.defaultHeight
             logger.debug(f"Default video size -> {new_w}x{new_h}")
 
-            # Shrink if it would exceed desktop size
             best_w, best_h = self.get_best_window_size(new_w, new_h)
             new_w, new_h = best_w, best_h
             logger.debug(f"Fitted to screen -> {new_w}x{new_h}")
 
-        # Apply the resize
         self.width, self.height = new_w, new_h
 
     def loadImage(self, image):
-        """Upload the video frame to the GPU as a texture without resizing it."""
+        """Upload the video frame to the GPU as a texture."""
         self.currentImage = image
         self.tex_w = image.shape[1]
         self.tex_h = image.shape[0]
@@ -212,81 +169,295 @@ class MainWindow:
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
 
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
                     self.tex_w, self.tex_h,
                     0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
-        
-    def doinit(self):
-        doinitGl()
-        GenFontTexture()
-        self.reshape()
 
-    def drawframe(self):
+    def getkeyp_pixel_pos(self, x: int, y: int) -> tuple[int, int]:
+        """Convert key position to pixel coordinates in the original image."""
+        pix_x = int(prefs.xoffset_whitekeys + x)
+        pix_y = int(prefs.yoffset_whitekeys + y)
+
+        if pix_x >= self.width or pix_y >= self.height or pix_x < 0 or pix_y < 0:
+            return (-1, -1)
+
+        # Map from window coordinates to original image coordinates
+        pix_x = int(round(pix_x * (self.defaultWidth / float(self.width))))
+        pix_y = int(round(pix_y * (self.defaultHeight / float(self.height))))
+        
+        if pix_x > self.defaultWidth - 1:
+            pix_x = self.defaultWidth - 1
+        if pix_y > self.defaultHeight - 1:
+            pix_y = self.defaultHeight - 1
+
+        return (pix_x, pix_y)
+
+    def detect_key_presses(self):
+        """
+        Core detection logic: samples pixels at key positions and determines
+        which keys are pressed based on color matching.
+        Returns a list of (key_index, keypressed_state, pressedcolor)
+        """
         if self.currentImage is None:
+            return []
+
+        detected_keys = []
+    
+
+        for i in range(len(prefs.keys_pos)):
+            pix_pos = self.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
+            if pix_pos == (-1, -1):
+                continue
+
+            # Sample the pixel color at key position
+            keybgr = self.currentImage[pix_pos[1], pix_pos[0]]
+            key = [keybgr[2], keybgr[1], keybgr[0]]  # BGR to RGB
+
+            # Spark-level sampling (for fade detection)
+            sparkkey = [0, 0, 0]
+            if prefs.use_sparks:
+                sh = max(1, int(self.sparksWindow.sparks_slider_height.value))
+                for spark_y_add_pos in range(sh):
+                    sparkpixpos = self.getkeyp_pixel_pos(
+                        prefs.keys_pos[i][0],
+                        prefs.keyp_spark_y_pos - spark_y_add_pos
+                    )
+                    if sparkpixpos != (-1, -1):
+                        spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
+                        sparkkey[0] += spark_bgr[2]
+                        sparkkey[1] += spark_bgr[1]
+                        sparkkey[2] += spark_bgr[0]
+
+                sparkkey = [sparkkey[0] / sh, sparkkey[1] / sh, sparkkey[2] / sh]
+
+            if i > 144:
+                continue
+
+            keypressed = 0
+            pressedcolor = [0, 0, 0]
+
+            # === COLOR MATCHING LOGIC ===
+            if prefs.use_alternate_keys:
+                # Alternate mode: detect by color CHANGE from baseline
+                delta = prefs.keyp_delta + prefs.keyp_colors_alternate_sensitivity[i]
+                if (abs(key[0] - prefs.keyp_colors_alternate[i][0]) > delta and
+                    abs(key[1] - prefs.keyp_colors_alternate[i][1]) > delta and
+                    abs(key[2] - prefs.keyp_colors_alternate[i][2]) > delta):
+                    keypressed = 1
+                    pressedcolor = prefs.keyp_colors_alternate[i]
+            else:
+                # Normal mode: match against defined colors
+                for key_id in range(len(prefs.keyp_colors)):
+                    keyc = prefs.keyp_colors[key_id]
+                    delta = prefs.keyp_delta
+
+                    # Per-color sensitivity override
+                    if prefs.use_percolor_delta and key_id < len(prefs.percolor_delta):
+                        delta = prefs.percolor_delta[key_id]
+
+                    # Skip undefined colors
+                    if keyc == [0, 0, 0]:
+                        continue
+
+                    # Color match found
+                    if (abs(key[0] - keyc[0]) < delta and
+                        abs(key[1] - keyc[1]) < delta and
+                        abs(key[2] - keyc[2]) < delta):
+
+                        keypressed = 1
+                        pressedcolor = keyc
+                        self.app.midiHandler.notes_pressed_color[i] = keyc
+
+                        # Spark fade detection (keypressed=2 means sustain/fade)
+                        if prefs.use_sparks:
+                            spark_delta = prefs.keyp_colors_sparks_sensitivity[key_id]
+                            has_spark_delta = (
+                                (sparkkey[0] - keyc[0]) > spark_delta or
+                                (sparkkey[1] - keyc[1]) > spark_delta or
+                                (sparkkey[2] - keyc[2]) > spark_delta
+                            )
+                            if not has_spark_delta:
+                                keypressed = 2  # Sustain state
+
+            detected_keys.append((i, keypressed, pressedcolor))
+
+        return detected_keys
+
+    def apply_rollcheck_filter(self, detected_keys):
+        """
+        Rollcheck: prevents adjacent keys from triggering simultaneously.
+        Modifies the detected_keys list in place based on priority rules.
+        """
+        if not prefs.rollcheck:
             return
 
-        glClear(GL_COLOR_BUFFER_BIT)
-        glLoadIdentity()
+        # Convert to dict for easier manipulation
+        notes_tmp = {i: state for i, state, _ in detected_keys}
 
-        draw_w, draw_h, off_x, off_y = self.get_aspect_fit_size(
-            self.tex_w, self.tex_h,
-            self.width, self.height
-        )
+        for i in range(1, len(prefs.keys_pos) - 1):
+            if i not in notes_tmp:
+                continue
 
-        # ------------------------------------------------------------------
-        # 2. Draw the background image using the fitted rectangle
-        # ------------------------------------------------------------------
-        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
-        glColor4f(1, 1, 1, 1)
+            if prefs.rollcheck_priority == 0:
+                # Black keys have priority
+                if not self.app.midiHandler.iswhitekey(i):
+                    if notes_tmp.get(i + 1, 0) > 0:
+                        notes_tmp[i] = 0
+                    if notes_tmp.get(i - 1, 0) > 0:
+                        notes_tmp[i] = 0
+            else:
+                # White keys have priority
+                if self.app.midiHandler.iswhitekey(i):
+                    if notes_tmp.get(i + 1, 0) > 0:
+                        notes_tmp[i] = 0
+                    if notes_tmp.get(i - 1, 0) > 0:
+                        notes_tmp[i] = 0
 
-        # Draw JUST the fitted quad, not the entire window
-        DrawQuad(off_x, off_y, off_x + draw_w, off_y + draw_h)
+        # Update the detected_keys list with filtered results
+        for idx, (i, _, color) in enumerate(detected_keys):
+            detected_keys[idx] = (i, notes_tmp.get(i, 0), color)
 
-        # ------------------------------------------------------------------
-        # 3. Draw overlays/UI
-        # ------------------------------------------------------------------
-        glColor4f(1.0, 0.5, 1.0, 0.5)
-        for window in self.glwindows:
-            window.draw()
-
-        # drawing hints over all windows
-        for window in self.glwindows:
-            window.drawhint()
+    def draw_key_overlays(self, detected_keys):
+        """
+        Renders the visual key indicators on top of the video.
+        This is the visualization layer - shows boxes, highlights, etc.
+        """
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glDisable(GL_TEXTURE_2D)
 
         glPushMatrix()
         glTranslatef(prefs.xoffset_whitekeys, prefs.yoffset_whitekeys, 0)
 
-        glDisable(GL_TEXTURE_2D)
-        # draw your white-key outlines/shapes here
+        # Convert detected_keys to dict for easier lookup
+        key_states = {i: (state, color) for i, state, color in detected_keys}
 
-        glEnable(GL_TEXTURE_2D)
+        for i in range(len(prefs.keys_pos)):
+            keypressed, pressedcolor = key_states.get(i, (0, [0, 0, 0]))
+
+            glPushMatrix()
+            glTranslatef(prefs.keys_pos[i][0], prefs.keys_pos[i][1], 0)
+
+            # === DRAW VERTICAL GUIDE LINE ===
+            glColor4f(1, 1, 1, 0.5)
+            if self.app.midiHandler.is_white_key(i):
+                glColor4f(0.57, 0.57, 0.57, 0.55)
+            DrawQuad(-0.5, -self.app.line_height, 0.5, self.app.line_height)
+
+            # === DRAW KEY STATE ===
+            if keypressed != 0:
+                # PRESSED: Draw colored box
+                glColor4f(
+                    pressedcolor[0] / 255.0,
+                    pressedcolor[1] / 255.0,
+                    pressedcolor[2] / 255.0,
+                    0.9
+                )
+                DrawQuad(-6, -7, 6, 7)
+
+                # Draw outline (different size for normal vs sustain)
+                glColor4f(0, 0, 0, 1)
+                if keypressed == 1:
+                    DrawRect(-7, -9, 7, 9, 3)  # Normal press
+                else:
+                    DrawRect(-5, -7, 5, 7, 3)  # Sustain/fade
+            else:
+                # UNPRESSED: Draw empty box
+                glColor4f(0, 0, 0, 1)
+                DrawRect(-7, -7, 7, 7, 1)
+                glColor4f(0.5, 1, 1.0, 0.7)
+                DrawQuad(-5, -5, 5, 5)
+
+            # === SPECIAL HIGHLIGHTS ===
+            
+            # Selected key highlight (blue)
+            if self.app.lastkeygrabid == i:
+                glColor4f(0.0, 0.5, 1.0, 0.7)
+                DrawQuad(-4, -4, 4, 4)
+
+            # Separate note channel marker (green)
+            if self.app.separate_note_id == i:
+                glColor4f(0, 1, 0, 1)
+                DrawRect(-7, -12, 7, 12, 2)
+
+            # Base octave marker (red)
+            if prefs.octave * 12 == i:
+                glColor4f(1, 0, 0, 1)
+                DrawRect(-9, 9, 9, 12, 3)
+
+            # Center dot
+            DrawQuad(-1, -1, 1, 1)
+
+            glPopMatrix()
+
+            # === DRAW SPARK INDICATORS ===
+            if prefs.use_sparks:
+                glPushMatrix()
+                glTranslatef(prefs.keys_pos[i][0], prefs.keyp_spark_y_pos, 0)
+                glColor4f(0.5, 1, 1.0, 0.7)
+                DrawQuad(-1, -1, 1, 1)  # Spark sampling point
+                DrawQuad(-0.5, -self.sparksWindow.sparks_slider_height.value, 0.5, 0)
+                glPopMatrix()
 
         glPopMatrix()
+        glDisable(GL_BLEND)
+
+    def drawframe(self):
+        """Main rendering function - draws everything each frame."""
+        if self.currentImage is None:
+            return
+
+        # === SETUP ===
+        glClear(GL_COLOR_BUFFER_BIT)
+        glLoadIdentity()
+        glDisable(GL_DEPTH_TEST)
+
+        # === DRAW VIDEO BACKGROUND ===
+        glEnable(GL_TEXTURE_2D)
+        draw_w, draw_h, off_x, off_y = self.get_aspect_fit_size(
+            self.tex_w, self.tex_h, self.width, self.height
+        )
+
+        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
+        glColor4f(1, 1, 1, 1)
+        DrawQuad(off_x, off_y, off_x + draw_w, off_y + draw_h)
+
+        # === KEY DETECTION & RENDERING ===
+        detected_keys = self.detect_key_presses()
+        self.apply_rollcheck_filter(detected_keys)
+        
+        # Update MIDI handler with current states
+        for i, keypressed, _ in detected_keys:
+            self.app.midiHandler.notes_tmp[i] = keypressed
+        
+        # Draw visual overlays
+        self.draw_key_overlays(detected_keys)
+
+        # === DRAW UI WINDOWS ===
+        for window in self.glwindows:
+            window.draw()
+
+        # Draw hints over all windows
+        for window in self.glwindows:
+            window.drawhint()
 
         pygame.display.flip()
 
-    # === UI cosmetic changes and handlers ===
+    # === EVENT HANDLERS ===
 
     def key_down_event(self, key):
         for window in self.glwindows:
             window.update_key_down(key)
 
-    # TODO:This function may not even do anything
     def mouse_up_event(self, mouse_x, mouse_y, button):
         for i in range(len(self.glwindows) - 1, -1, -1):
-            # print("process mouse up on windiws id: ", i)
             if self.glwindows[i].update_mouse_up(mouse_x, mouse_y, button) == 1:
-                mouseOnWindows = True
-                resort = True
                 break
 
     def mouse_down_event(self, mouse_x, mouse_y, button):
         resort = False
         for i in range(len(self.glwindows) - 1, -1, -1):
-            # print("process mouse down on windiws id: ", i)
             if self.glwindows[i].update_mouse_down(mouse_x, mouse_y, button) == 1:
-                mouseOnWindows = True
                 resort = True
                 break
         if resort:
@@ -299,20 +470,15 @@ class MainWindow:
     def get_colorBtn_list(self):
         return self.colorWindow.colorBtns
 
-    def flip_switch_on_keypress(sender):
-        sender.switch_status = not sender.switch_status
+    # === UI TOGGLE FUNCTIONS ===
 
     def draw_toggle_windows(self, sender=None):
-
         logger.debug("Hide all windows")
-
         for i in self.glwindows:
-            # print("i.type =%s" % (str(type(i))) )
             if isinstance(i, GLWindow):
                 i.fullhidden = self.ShowHideButton.switch_status
 
     def toggle_window_button(self):
-        # Functions that allow hotkeys for buttons need to manually flip button's switch status
         self.ShowHideButton.switch_status = not self.ShowHideButton.switch_status
 
     def toggle_notes_overlap(self):
@@ -324,10 +490,11 @@ class MainWindow:
         self.settingsWindow.ignore_notes_with_minimal_duration_btn.switch_status = (
             not self.settingsWindow.ignore_notes_with_minimal_duration_btn.switch_status
         )
-    
+
+    # === SETTINGS UPDATE FUNCTIONS ===
+
     def update_selected_color_delta(self, sender, index):
         self.sparksWindow.selected_color_delta.color = sender.color
-
         if index < len(prefs.percolor_delta):
             self.sparksWindow.selected_color_delta.setvalue(prefs.percolor_delta[index])
             self.sparksWindow.sparks_slider_delta.id = Gl.keyp_colormap_id
@@ -342,11 +509,8 @@ class MainWindow:
             prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] + 1
         else:
             prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] - 1
-        if prefs.keyp_colors_channel[i] > 15:
-            prefs.keyp_colors_channel[i] = 15
-        if prefs.keyp_colors_channel[i] < 0:
-            prefs.keyp_colors_channel[i] = 0
-
+        
+        prefs.keyp_colors_channel[i] = max(0, min(15, prefs.keyp_colors_channel[i]))
         self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(
             prefs.keyp_colors_channel[i] + 1
         )
@@ -360,6 +524,7 @@ class MainWindow:
         self.extraWindow.extra_slider1.setvalue(new_value)
 
     def update_values_from_settings(self):
+        """Sync all UI controls with current preference values."""
         if len(self.colorWindow.colorBtns_channel_labels) > 0:
             for i in range(len(self.colorWindow.colorBtns)):
                 self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(

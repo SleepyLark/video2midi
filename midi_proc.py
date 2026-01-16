@@ -12,6 +12,9 @@ from video2midi.prefs import prefs
 from video2midi.models.midi import *
 from utils import *
 
+import logging
+logger = logging.getLogger(__name__)
+
 class MidiHandler:
     FORMAT_1 = 1
     FORMAT_2 = 2
@@ -41,34 +44,45 @@ class MidiHandler:
 
             prefs.keyp_colors_alternate.append([0,0,0])
             prefs.keyp_colors_alternate_sensitivity.append(0)
+        
+        logger.debug(len(self.notes))
+        self.update_key_positions(True)
+        logger.debug(len(prefs.keys_pos))
+    
+    def is_black_key(self, key_id: int) -> bool:
+      j = key_id % 12
+      return (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10)
 
+    def is_white_key(self, key_id: int) -> bool:
+        return not self.is_black_key(key_id)
 
-def update_key_positions(append=False):
-    current_x = 0
-    if append:
-        print(f'clear keys, set to {prefs.keys_pos_cnt}')
-        prefs.keys_pos = []
+    def update_key_positions(self,append=False):
+        current_x = 0
+        if append:
+            print(f'clear keys, set to {prefs.keys_pos_cnt}')
+            prefs.keys_pos = []
 
-    for key_index in range(prefs.keys_pos_cnt):
-        octave_index = key_index // 12
-        semitone_index = key_index % 12
-        if (append) or (octave_index * 12 + semitone_index > len(prefs.keys_pos) - 1):
-            prefs.keys_pos.append([0, 0])
-        prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x))
-        prefs.keys_pos[octave_index * 12 + semitone_index][1] = 0
-        if is_black_key(semitone_index):
-            prefs.keys_pos[octave_index * 12 + semitone_index][1] = prefs.yoffset_blackkeys
-            current_x += -prefs.whitekey_width
-        if (semitone_index == 1) or (semitone_index == 6):
-            prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * prefs.blackkey_relative_position))
-        if (semitone_index == 8):
-            prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * 0.5))
-        if (semitone_index == 3) or (semitone_index == 10):
-            prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
-        current_x += prefs.whitekey_width
-    for octave_index in range(len(prefs.keys_pos)):
-        prefs.keys_pos[octave_index] = v_rotate(prefs.keys_pos[octave_index], prefs.keys_angle)
-        prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
+        for key_index in range(prefs.keys_pos_cnt):
+            octave_index = key_index // 12
+            semitone_index = key_index % 12
+            if (append) or (octave_index * 12 + semitone_index > len(prefs.keys_pos) - 1):
+                prefs.keys_pos.append([0, 0])
+            prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x))
+            prefs.keys_pos[octave_index * 12 + semitone_index][1] = 0
+            
+            if self.is_black_key(semitone_index):
+                prefs.keys_pos[octave_index * 12 + semitone_index][1] = prefs.yoffset_blackkeys
+                current_x += -prefs.whitekey_width
+            if (semitone_index == 1) or (semitone_index == 6):
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * prefs.blackkey_relative_position))
+            if (semitone_index == 8):
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * 0.5))
+            if (semitone_index == 3) or (semitone_index == 10):
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
+            current_x += prefs.whitekey_width
+        for octave_index in range(len(prefs.keys_pos)):
+            prefs.keys_pos[octave_index] = v_rotate(prefs.keys_pos[octave_index], prefs.keys_angle)
+            prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
 # processmidi and reconstruct will be moved here from v2m.py
 # Example stub for processmidi:
@@ -350,10 +364,3 @@ def processmidi(self):
 def reconstruct():
     # ... (full reconstruct code from v2m.py, unchanged)
     pass  # Replace with actual code
-
-def is_black_key(key_id: int) -> bool:
-    j = key_id % 12
-    return (j == 1) or (j == 3) or (j == 6) or (j == 8) or (j == 10)
-
-def is_white_key(key_id: int) -> bool:
-    return not is_black_key(key_id)

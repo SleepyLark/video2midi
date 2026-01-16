@@ -78,18 +78,18 @@ class AppController:
                 self.appView.mouse_up_event(mouse_x, mouse_y, event.button)
 
                 if event.button == 1:
-                    keygrab = 0
-                    keygrabid = -1
+                    self.keygrab = 0
+                    self.keygrabid = -1
                 if event.button == 3:
-                    keygrab = 0
+                    self.keygrab = 0
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_click_event(event.button)
 
             if (self.keygrab == 1) and (self.keygrabid > -1):
                 #             print "moving keyid = " + str(keygrabid)
-                prefs.keys_pos[keygrabid][0] = mouse_x - prefs.xoffset_whitekeys
-                prefs.keys_pos[keygrabid][1] = mouse_y - prefs.yoffset_whitekeys
+                prefs.keys_pos[self.keygrabid][0] = mouse_x - prefs.xoffset_whitekeys
+                prefs.keys_pos[self.keygrabid][1] = mouse_y - prefs.yoffset_whitekeys
             if self.keygrab == 2:
                 #              print "moving offsets : "+ str(mouse_x) + " x " + str(mouse_y)
                 prefs.xoffset_whitekeys = mouse_x - self.keygrabaddx
@@ -105,7 +105,7 @@ class AppController:
 
         if key == pygame.K_q:
             if prefs.autoclose == 1:
-                running = False
+                self.running = False
             else:
                 # reconstruct()
                 pass
@@ -160,11 +160,11 @@ class AppController:
 
         if key == pygame.K_PLUS or key == pygame.K_KP_PLUS or key == pygame.K_EQUALS:
             prefs.keys_angle -= 5
-            update_key_positions()
+            self.midiHandler.update_key_positions()
 
         if key == pygame.K_MINUS or key == pygame.K_KP_MINUS:
             prefs.keys_angle += 5
-            update_key_positions()
+            self.midiHandler.update_key_positions()
 
         if key == pygame.K_UP:
             if mods & pygame.KMOD_ALT:
@@ -175,7 +175,7 @@ class AppController:
                     prefs.yoffset_blackkeys -= 1
                 else:
                     prefs.yoffset_blackkeys -= 2
-                update_key_positions()
+                self.midiHandler.update_key_positions()
 
         if key == pygame.K_DOWN:
             if mods & pygame.KMOD_ALT:
@@ -185,7 +185,7 @@ class AppController:
                     prefs.yoffset_blackkeys += 1
                 else:
                     prefs.yoffset_blackkeys += 2
-                update_key_positions()
+                self.midiHandler.update_key_positions()
 
         if key == pygame.K_TAB:
             self.show_or_hide_all_windows(None)
@@ -195,14 +195,14 @@ class AppController:
                 prefs.whitekey_width -= 0.1
             else:
                 prefs.whitekey_width -= 1.0
-            update_key_positions()
+            self.midiHandler.update_key_positions()
 
         if key == pygame.K_RIGHT:
             if mods & pygame.KMOD_SHIFT:
                 prefs.whitekey_width += 0.1
             else:
                 prefs.whitekey_width += 1.0
-            update_key_positions()
+            self.midiHandler.update_key_positions()
 
         if key == pygame.K_HOME:
             self.scroll_to_start(None)
@@ -272,12 +272,12 @@ class AppController:
         if button == 4:
             prefs.whitekey_width += 0.05
             #                print "whitekey_width="+str(whitekey_width)
-            update_key_positions()
+            self.midiHandler.update_key_positions()
         #                scale+=0.1
         if button == 5:
             prefs.whitekey_width -= 0.05
             #                print "whitekey_width="+str(whitekey_width)
-            update_key_positions()
+            self.midiHandler.update_key_positions()
         if button == 1:
             if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
                 pix_x = int(mouse_x)
@@ -490,15 +490,15 @@ class AppController:
 
     def rotate_cw(self,sender):
         prefs.keys_angle -= 5
-        update_key_positions()
+        self.midiHandler.update_key_positions()
 
     def rotate_ccw(self,sender):
         prefs.keys_angle += 5
-        update_key_positions()
+        self.midiHandler.update_key_positions()
 
     def change_cnt(self,sender):
         logger.debug("change count")
-        update_key_positions(True)
+        self.midiHandler.update_key_positions(True)
 
     def vertical_align_keys(self, separate_black_keys=1, align=1):
         logger.debug(f"lastkeygrabid {self.lastkeygrabid}")
@@ -506,15 +506,15 @@ class AppController:
             return
 
         y = prefs.keys_pos[self.lastkeygrabid][align]
-        selected_black_key = is_black_key(self.lastkeygrabid)
+        selected_black_key = self.midiHandler.is_black_key(self.lastkeygrabid)
 
         for idx in range(len(prefs.keys_pos)):
             if separate_black_keys == 1:
                 if selected_black_key:
-                    if is_black_key(idx):
+                    if self.midiHandler.is_black_key(idx):
                         prefs.keys_pos[idx][align] = y
                 else:
-                    if not is_black_key(idx):
+                    if not self.midiHandler.is_black_key(idx):
                         prefs.keys_pos[idx][align] = y
             else:
                 prefs.keys_pos[idx][align] = y
@@ -552,7 +552,7 @@ class AppController:
                 round(current_x)
             )
             prefs.keys_pos[octave_index * 12 + semitone_index][1] = 0
-            if is_black_key(semitone_index):
+            if self.midiHandler.is_black_key(semitone_index):
                 prefs.keys_pos[octave_index * 12 + semitone_index][
                     1
                 ] = prefs.yoffset_blackkeys

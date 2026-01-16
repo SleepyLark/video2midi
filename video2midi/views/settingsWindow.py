@@ -20,7 +20,7 @@ class SettingsWindow(GLWindow):
         self.root.appendChild( GLButton(200, 40 ,140,20,0    , [128,128,128], "Set start frame"                   , self.app.set_start_frame_to_current_frame, hint = "s - hot key, (mods : shift + s, set processing start frame to the beginning)" ) )
         self.root.appendChild( GLButton(200+141, 40 ,140,20,0, [128,128,128], "Set end frame"                     , self.app.set_end_frame_to_current_frame  , hint = "e - hot key, (mods : shift + e, set processing end frame to the ending)" ) )
 
-        self.notes_overlap_btn = GLButton(200, 80 ,140,20,0, [128,128,128],  "Notes overlap"                     , self.app.switch_notes_overlap            , hint = "o - hot key", switch=1, switch_status=0)
+        self.notes_overlap_btn = GLButton(200, 80 ,140,20,0, [128,128,128],  "Permit Note Restrike"                     , self.app.switch_notes_overlap            , hint = "o - hot key", switch=1, switch_status=0)
         self.root.appendChild( self.notes_overlap_btn )
         self.root.appendChild( GLButton(200+141, 80 ,140,20,0, [128,128,128],  "Sync notes"                    , self.app.switch_sync_notes_start_pos     , hint = "sync notes start pos", switch=1, switch_status=0) )
         self.ignore_notes_with_minimal_duration_btn = GLButton(200,100 ,281,20,0, [128,128,128],  "Ignore notes with minimal duration", self.app.switch_ignore_notes_with_minimal_duration, hint = "i - hot key", switch=1, switch_status=0)
@@ -34,12 +34,12 @@ class SettingsWindow(GLWindow):
         self.root.appendChild( GLButton(200    , 140 ,140,20,0, [128,128,128], "Save settings"                  , self.app.btndown_save_settings  , hint = "F2 - hot key, save current settings" ) )
         self.root.appendChild( GLButton(200+141, 140 ,140,20,0, [128,128,128], "Load settings"                  , self.app.btndown_load_settings  , hint = "F3 - hot key, load saved settings" ) )
 
-        self.rollcheck_button = GLButton(200,160 ,140,20,1, [128,128,128], "Roll check" ,self.app.change_rollcheck,switch=1, switch_status=prefs.rollcheck )
+        self.rollcheck_button = GLButton(200,160 ,140,20,1, [128,128,128], "Single Key Priority" ,self.app.change_rollcheck,switch=1, switch_status=prefs.rollcheck )
         self.root.appendChild(self.rollcheck_button)
 
         self.root.appendChild( GLButton(200+141, 160 ,140,20,1, [128,128,128], "Per channel save" ,self.app.change_save_to_disk_per_channel,switch=1, switch_status= prefs.save_to_disk_per_channel, hint = "split the output midi per channels" ) )
 
-        self.rollcheck_priority_button = GLButton(200,180 ,222,20,1, [128,128,128], "Roll check white keys prioritized" ,self.app.change_rollcheck_priority,switch=1, switch_status=prefs.rollcheck_priority )
+        self.rollcheck_priority_button = GLButton(200,180 ,222,20,1, [128,128,128], "Prioritize White Keys" ,self.app.change_rollcheck_priority,switch=1, switch_status=prefs.rollcheck_priority )
         self.root.appendChild(self.rollcheck_priority_button)
 
         label1 = GLLabel(10,0, "Base octave: " + str(prefs.octave))
@@ -79,7 +79,7 @@ class SettingsWindow(GLWindow):
 
 
     def addSliders(self):
-        self.key_sensitivity_slider = GLSpinBox(10,40, 81,18, 0,130,prefs.keyp_delta,label="Sensitivity")
+        self.key_sensitivity_slider = GLSpinBox(10,40, 81,18, 0,130,prefs.keyp_delta,label="Detection Sensitivity")
         self.key_sensitivity_slider.round=1
         self.root.appendChild(self.key_sensitivity_slider)
 
@@ -87,11 +87,11 @@ class SettingsWindow(GLWindow):
         self.minimal_duration_slider.round=0
         self.root.appendChild(self.minimal_duration_slider)
 
-        self.tempo_slider = GLSpinBox(10,133, 81,18, 30,240,prefs.tempo,label="Output tempo for midi")
+        self.tempo_slider = GLSpinBox(10,133, 81,18, 30,240,prefs.tempo,label="Output tempo for MIDI")
         self.tempo_slider.round=0
         self.root.appendChild(self.tempo_slider)
 
-        self.midi_format_slider = GLSpinBox(10,175, 81,18, 1,2,prefs.midi_file_format,label="Output midi format type")
+        self.midi_format_slider = GLSpinBox(10,175, 81,18, 1,2,prefs.midi_file_format,label="Output MIDI format type")
         self.midi_format_slider.round=0
         self.root.appendChild(self.midi_format_slider)
 
