@@ -1,6 +1,6 @@
 """
 ui.py - Pygame/OpenGL UI and widget logic for video2midi
-Handles window creation, event loop, and drawing routines.
+Handles window creation, event loop, and drawing routines with proper coordinate transformation.
 """
 
 import pygame
@@ -35,6 +35,12 @@ class MainWindow:
         self.currentImage = None
         self.renderedFrame = None
         self.screen = None
+
+        # Video display transform (for letterboxing/pillarboxing)
+        self.video_draw_w = frame_w
+        self.video_draw_h = frame_h
+        self.video_offset_x = 0
+        self.video_offset_y = 0
 
         os.environ["SDL_VIDEO_CENTERED"] = "1"
 
@@ -125,6 +131,10 @@ class MainWindow:
         self.width = w
         self.height = h
 
+        # Update video display transform
+        self.video_draw_w, self.video_draw_h, self.video_offset_x, self.video_offset_y = \
+            self.get_aspect_fit_size(self.defaultWidth, self.defaultHeight, w, h)
+
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -173,24 +183,89 @@ class MainWindow:
                     self.tex_w, self.tex_h,
                     0, GL_RGB, GL_UNSIGNED_BYTE, rgb_image)
 
-    def getkeyp_pixel_pos(self, x: int, y: int) -> tuple[int, int]:
-        """Convert key position to pixel coordinates in the original image."""
-        pix_x = int(prefs.xoffset_whitekeys + x)
-        pix_y = int(prefs.yoffset_whitekeys + y)
+    def video_to_screen_coords(self, video_x, video_y):
+        """
+        Convert coordinates from video space to current screen space.
+        Accounts for window resizing and letterboxing/pillarboxing.
+        
+        Args:
+            video_x, video_y: Coordinates in original video resolution
+            
+        Returns:
+            screen_x, screen_y: Coordinates in current window space
+        """
+        # Scale factor from video to displayed video
+        scale_x = self.video_draw_w / self.defaultWidth
+        scale_y = self.video_draw_h / self.defaultHeight
+        
+        # Apply scale and offset
+        screen_x = video_x * scale_x + self.video_offset_x
+        screen_y = video_y * scale_y + self.video_offset_y
+        
+        return screen_x, screen_y
 
-        if pix_x >= self.width or pix_y >= self.height or pix_x < 0 or pix_y < 0:
+    def screen_to_video_coords(self, screen_x, screen_y):
+        """
+        Convert coordinates from screen space to video space.
+        Inverse of video_to_screen_coords.
+        
+        Args:
+            screen_x, screen_y: Coordinates in current window space
+            
+        Returns:
+            video_x, video_y: Coordinates in original video resolution
+        """
+        # Remove offset
+        x = screen_x - self.video_offset_x
+        y = screen_y - self.video_offset_y
+        
+        # Scale back to video resolution
+        scale_x = self.defaultWidth / self.video_draw_w
+        scale_y = self.defaultHeight / self.video_draw_h
+        
+        video_x = x * scale_x
+        video_y = y * scale_y
+        
+        return video_x, video_y
+
+    def getkeyp_pixel_pos(self, x: int, y: int) -> tuple[int, int]:
+        """
+        Convert key position to pixel coordinates in the original image.
+        
+        The key positions (prefs.keys_pos) are in video coordinate space,
+        but with offsets applied. This function returns the actual pixel
+        coordinates in the original video frame for sampling.
+        """
+        # Key positions are stored relative to the video, so add offsets
+        video_x = prefs.xoffset_whitekeys + x
+        video_y = prefs.yoffset_whitekeys + y
+
+        # Bounds check against original video dimensions
+        if video_x < 0 or video_x >= self.defaultWidth or \
+           video_y < 0 or video_y >= self.defaultHeight:
             return (-1, -1)
 
-        # Map from window coordinates to original image coordinates
-        pix_x = int(round(pix_x * (self.defaultWidth / float(self.width))))
-        pix_y = int(round(pix_y * (self.defaultHeight / float(self.height))))
-        
-        if pix_x > self.defaultWidth - 1:
-            pix_x = self.defaultWidth - 1
-        if pix_y > self.defaultHeight - 1:
-            pix_y = self.defaultHeight - 1
+        return (int(video_x), int(video_y))
 
-        return (pix_x, pix_y)
+    def get_key_screen_position(self, key_index):
+        """
+        Get the screen position where a key should be drawn.
+        Transforms from video space to current screen space.
+        
+        Returns:
+            (screen_x, screen_y) or (-1, -1) if out of bounds
+        """
+        if key_index >= len(prefs.keys_pos):
+            return (-1, -1)
+            
+        # Get key position in video space (with offsets)
+        video_x = prefs.xoffset_whitekeys + prefs.keys_pos[key_index][0]
+        video_y = prefs.yoffset_whitekeys + prefs.keys_pos[key_index][1]
+        
+        # Transform to screen space
+        screen_x, screen_y = self.video_to_screen_coords(video_x, video_y)
+        
+        return (screen_x, screen_y)
 
     def detect_key_presses(self):
         """
@@ -202,16 +277,17 @@ class MainWindow:
             return []
 
         detected_keys = []
-    
 
         for i in range(len(prefs.keys_pos)):
+            # Get pixel position in original video for sampling
             pix_pos = self.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
             if pix_pos == (-1, -1):
                 continue
 
             # Sample the pixel color at key position
             keybgr = self.currentImage[pix_pos[1], pix_pos[0]]
-            key = [keybgr[2], keybgr[1], keybgr[0]]  # BGR to RGB
+            # FIX: Convert numpy values to Python ints to avoid overflow warnings
+            key = [int(keybgr[2]), int(keybgr[1]), int(keybgr[0])]  # BGR to RGB
 
             # Spark-level sampling (for fade detection)
             sparkkey = [0, 0, 0]
@@ -224,11 +300,13 @@ class MainWindow:
                     )
                     if sparkpixpos != (-1, -1):
                         spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
-                        sparkkey[0] += spark_bgr[2]
-                        sparkkey[1] += spark_bgr[1]
-                        sparkkey[2] += spark_bgr[0]
+                        # FIX: Convert to int here too
+                        sparkkey[0] += int(spark_bgr[2])
+                        sparkkey[1] += int(spark_bgr[1])
+                        sparkkey[2] += int(spark_bgr[0])
 
-                sparkkey = [sparkkey[0] / sh, sparkkey[1] / sh, sparkkey[2] / sh]
+                # FIX: Convert to int after averaging
+                sparkkey = [int(sparkkey[0] / sh), int(sparkkey[1] / sh), int(sparkkey[2] / sh)]
 
             if i > 144:
                 continue
@@ -282,7 +360,6 @@ class MainWindow:
             detected_keys.append((i, keypressed, pressedcolor))
 
         return detected_keys
-
     def apply_rollcheck_filter(self, detected_keys):
         """
         Rollcheck: prevents adjacent keys from triggering simultaneously.
@@ -300,14 +377,14 @@ class MainWindow:
 
             if prefs.rollcheck_priority == 0:
                 # Black keys have priority
-                if not self.app.midiHandler.iswhitekey(i):
+                if not self.app.midiHandler.is_black_key(i):
                     if notes_tmp.get(i + 1, 0) > 0:
                         notes_tmp[i] = 0
                     if notes_tmp.get(i - 1, 0) > 0:
                         notes_tmp[i] = 0
             else:
                 # White keys have priority
-                if self.app.midiHandler.iswhitekey(i):
+                if self.app.midiHandler.is_black_key(i):
                     if notes_tmp.get(i + 1, 0) > 0:
                         notes_tmp[i] = 0
                     if notes_tmp.get(i - 1, 0) > 0:
@@ -321,13 +398,16 @@ class MainWindow:
         """
         Renders the visual key indicators on top of the video.
         This is the visualization layer - shows boxes, highlights, etc.
+        Properly scales and positions keys based on current window size.
         """
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glDisable(GL_TEXTURE_2D)
 
-        glPushMatrix()
-        glTranslatef(prefs.xoffset_whitekeys, prefs.yoffset_whitekeys, 0)
+        # Calculate scale factors for key size
+        scale_x = self.video_draw_w / self.defaultWidth
+        scale_y = self.video_draw_h / self.defaultHeight
+        scale = min(scale_x, scale_y)  # Use uniform scale for keys
 
         # Convert detected_keys to dict for easier lookup
         key_states = {i: (state, color) for i, state, color in detected_keys}
@@ -335,12 +415,20 @@ class MainWindow:
         for i in range(len(prefs.keys_pos)):
             keypressed, pressedcolor = key_states.get(i, (0, [0, 0, 0]))
 
+            # Get screen position for this key
+            screen_x, screen_y = self.get_key_screen_position(i)
+            if screen_x == -1 and screen_y == -1:
+                continue
+
             glPushMatrix()
-            glTranslatef(prefs.keys_pos[i][0], prefs.keys_pos[i][1], 0)
+            glTranslatef(screen_x, screen_y, 0)
+            
+            # Scale the key visualization
+            glScalef(scale, scale, 1.0)
 
             # === DRAW VERTICAL GUIDE LINE ===
             glColor4f(1, 1, 1, 0.5)
-            if self.app.midiHandler.is_white_key(i):
+            if not self.app.midiHandler.is_black_key(i):
                 glColor4f(0.57, 0.57, 0.57, 0.55)
             DrawQuad(-0.5, -self.app.line_height, 0.5, self.app.line_height)
 
@@ -392,14 +480,22 @@ class MainWindow:
 
             # === DRAW SPARK INDICATORS ===
             if prefs.use_sparks:
+                # Get spark screen position
+                spark_video_x = prefs.xoffset_whitekeys + prefs.keys_pos[i][0]
+                spark_video_y = prefs.keyp_spark_y_pos
+                spark_screen_x, spark_screen_y = self.video_to_screen_coords(
+                    spark_video_x, spark_video_y
+                )
+                
                 glPushMatrix()
-                glTranslatef(prefs.keys_pos[i][0], prefs.keyp_spark_y_pos, 0)
+                glTranslatef(spark_screen_x, spark_screen_y, 0)
+                glScalef(scale, scale, 1.0)
+                
                 glColor4f(0.5, 1, 1.0, 0.7)
                 DrawQuad(-1, -1, 1, 1)  # Spark sampling point
                 DrawQuad(-0.5, -self.sparksWindow.sparks_slider_height.value, 0.5, 0)
                 glPopMatrix()
 
-        glPopMatrix()
         glDisable(GL_BLEND)
 
     def drawframe(self):
@@ -414,13 +510,12 @@ class MainWindow:
 
         # === DRAW VIDEO BACKGROUND ===
         glEnable(GL_TEXTURE_2D)
-        draw_w, draw_h, off_x, off_y = self.get_aspect_fit_size(
-            self.tex_w, self.tex_h, self.width, self.height
-        )
-
+        
         glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
         glColor4f(1, 1, 1, 1)
-        DrawQuad(off_x, off_y, off_x + draw_w, off_y + draw_h)
+        DrawQuad(self.video_offset_x, self.video_offset_y, 
+                 self.video_offset_x + self.video_draw_w, 
+                 self.video_offset_y + self.video_draw_h)
 
         # === KEY DETECTION & RENDERING ===
         detected_keys = self.detect_key_presses()

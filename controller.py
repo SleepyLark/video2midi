@@ -86,14 +86,21 @@ class AppController:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 self.mouse_click_event(event.button)
 
+            # === KEY DRAGGING LOGIC (FIXED) ===
             if (self.keygrab == 1) and (self.keygrabid > -1):
-                #             print "moving keyid = " + str(keygrabid)
-                prefs.keys_pos[self.keygrabid][0] = mouse_x - prefs.xoffset_whitekeys
-                prefs.keys_pos[self.keygrabid][1] = mouse_y - prefs.yoffset_whitekeys
+                # Convert screen mouse position to video space
+                video_x, video_y = self.appView.screen_to_video_coords(mouse_x, mouse_y)
+                
+                # Update key position in video space
+                prefs.keys_pos[self.keygrabid][0] = int(video_x - prefs.xoffset_whitekeys)
+                prefs.keys_pos[self.keygrabid][1] = int(video_y - prefs.yoffset_whitekeys)
+                
             if self.keygrab == 2:
-                #              print "moving offsets : "+ str(mouse_x) + " x " + str(mouse_y)
-                prefs.xoffset_whitekeys = mouse_x - self.keygrabaddx
-                prefs.yoffset_whitekeys = mouse_y
+                # Convert screen mouse position to video space for offset dragging
+                video_x, video_y = self.appView.screen_to_video_coords(mouse_x, mouse_y)
+                
+                prefs.xoffset_whitekeys = int(video_x - self.keygrabaddx)
+                prefs.yoffset_whitekeys = int(video_y)
 
             self.appView.mouse_move(mouse_x, mouse_y)
 
@@ -231,33 +238,34 @@ class AppController:
         if key == pygame.K_p:
             size = 5
             self.separate_note_id = -1
+            
             for i in range(len(prefs.keys_pos)):
-                # TODO: FIGURE OUT WHAT THIS CALCULATION IS
-                magic_x = abs(
-                    mouse_x - (prefs.keys_pos[i][0] + prefs.xoffset_whitekeys)
-                )
-                magic_y = abs(
-                    mouse_y - (prefs.keys_pos[i][1] + prefs.yoffset_whitekeys)
-                )
-
-                if magic_x < size and magic_y < size:
+                # Get screen position for hit testing
+                key_screen_x, key_screen_y = self.appView.get_key_screen_position(i)
+                
+                if key_screen_x == -1:
+                    continue
+                    
+                if abs(mouse_x - key_screen_x) < size and abs(mouse_y - key_screen_y) < size:
                     self.separate_note_id = i
+                    logger.debug(f"Marked key {i} for channel separation")
+                    break
 
         if key == pygame.K_KP4:
             if self.lastkeygrabid > 0 and self.lastkeygrabid < len(prefs.keys_pos):
-                prefs.keys_pos[self.lastkeygrabi][0] -= 1
-
+                prefs.keys_pos[self.lastkeygrabid][0] -= 1
+            
         if key == pygame.K_KP6:
             if self.lastkeygrabid > 0 and self.lastkeygrabid < len(prefs.keys_pos):
-                prefs.keys_pos[self.lastkeygrabi][0] += 1
-
+                prefs.keys_pos[self.lastkeygrabid][0] += 1
+                
         if key == pygame.K_KP8:
             if self.lastkeygrabid > 0 and self.lastkeygrabid < len(prefs.keys_pos):
-                prefs.keys_pos[self.lastkeygrabi][1] -= 1
-
+                prefs.keys_pos[self.lastkeygrabid][1] -= 1
+                
         if key == pygame.K_KP2:
             if self.lastkeygrabid > 0 and self.lastkeygrabid < len(prefs.keys_pos):
-                prefs.keys_pos[self.lastkeygrabi][1] += 1
+                prefs.keys_pos[self.lastkeygrabid][1] += 1
 
         # if key == pygame.K_KP1:
         #     vertical_align_keys(1, 1)
@@ -269,109 +277,77 @@ class AppController:
         mouse_x, mouse_y = pygame.mouse.get_pos()
 
         self.appView.mouse_down_event(mouse_x, mouse_y, button)
+        
         if button == 4:
             prefs.whitekey_width += 0.05
-            #                print "whitekey_width="+str(whitekey_width)
             self.midiHandler.update_key_positions()
-        #                scale+=0.1
+            
         if button == 5:
             prefs.whitekey_width -= 0.05
-            #                print "whitekey_width="+str(whitekey_width)
             self.midiHandler.update_key_positions()
+            
         if button == 1:
             if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
-                pix_x = int(mouse_x)
-                pix_y = int(mouse_y)
-                if not (
-                    (pix_x >= self.appView.width)
-                    or (pix_y >= self.appView.height)
-                    or (pix_x < 0)
-                    or (pix_y < 0)
-                ):
-                    if prefs.resize == 1:
-                        pix_x = int(round(pix_x * (self.video.video_width / float(prefs.resize_width))))
-                        pix_y = int(round(pix_y * (self.video.video_height / float(prefs.resize_height))))
-
-                        if pix_x > self.video.video_width - 1:
-                            pix_x = self.video.video_width - 1
-
-                        if pix_y > self.video.video_height - 1:
-                            pix_y = self.video.video_height - 1
-
-                        logger.debug(
-                            "original mouse x:"
-                            + str(mouse_x)
-                            + "x"
-                            + str(mouse_y)
-                            + " mapped :"
-                            + str(pix_x)
-                            + "x"
-                            + str(pix_y)
-                        )
-
+                # Convert screen coordinates to video coordinates for color picking
+                video_x, video_y = self.appView.screen_to_video_coords(mouse_x, mouse_y)
+                
+                # Bounds check
+                if 0 <= video_x < self.video.video_width and 0 <= video_y < self.video.video_height:
+                    pix_x = int(video_x)
+                    pix_y = int(video_y)
+                    
                     key_BGR = self.video.image[pix_y, pix_x]
                     prefs.keyp_colors[Gl.keyp_colormap_id][0] = key_BGR[2]
                     prefs.keyp_colors[Gl.keyp_colormap_id][1] = key_BGR[1]
                     prefs.keyp_colors[Gl.keyp_colormap_id][2] = key_BGR[0]
-            # else:
-            #     #                if not (mods & pygame.KMOD_CTRL):
-            #     if not colorWindow.active and not mouseOnWindows:
-            #         Gl.keyp_colormap_id = -1
-            #     # keyp_colormap_id = -1
             
+            # Key grabbing logic - now uses screen positions for hit testing
             size = 5
             if mods & pygame.KMOD_CTRL:
                 self.lastkeygrabid = -1
+                
             for i in range(len(prefs.keys_pos)):
-                if (
-                    abs(
-                        mouse_x
-                        - (prefs.keys_pos[i][0] + prefs.xoffset_whitekeys)
-                    )
-                    < size
-                ) and (
-                    abs(
-                        mouse_y
-                        - (prefs.keys_pos[i][1] + prefs.yoffset_whitekeys)
-                    )
-                    < size
-                ):
+                # Get screen position of this key for hit testing
+                key_screen_x, key_screen_y = self.appView.get_key_screen_position(i)
+                
+                if key_screen_x == -1:
+                    continue
+                    
+                # Check if mouse is near this key (in screen space)
+                if abs(mouse_x - key_screen_x) < size and abs(mouse_y - key_screen_y) < size:
                     self.keygrab = 1
                     if not (mods & pygame.KMOD_CTRL):
                         self.keygrabid = i
                     self.lastkeygrabid = i
-                    self.appView.update_alternate_sensitivity(prefs.keyp_colors_alternate_sensitivity[i])
-                    logger.debug("ok click found on : " + str(self.keygrabid))
+                    self.appView.update_alternate_sensitivity(
+                        prefs.keyp_colors_alternate_sensitivity[i]
+                    )
+                    logger.debug(f"Grabbed key: {i}")
                     break
-        #              if ( button == 2 ):
-        #                self.lastkeygrabid=-1
+                    
         if button == 3:
             self.keygrab = 2
             size = 5
             logger.debug(
-                "x offset "
-                + str(prefs.xoffset_whitekeys)
-                + " y offset: "
-                + str(prefs.yoffset_whitekeys)
+                f"x offset {prefs.xoffset_whitekeys} y offset: {prefs.yoffset_whitekeys}"
             )
+            
+            # Convert mouse to video space to get the grab offset
+            video_x, video_y = self.appView.screen_to_video_coords(mouse_x, mouse_y)
             self.keygrabaddx = 0
+            
             for i in range(len(prefs.keys_pos)):
-                if (
-                    abs(
-                        mouse_x
-                        - (prefs.keys_pos[i][0] + prefs.xoffset_whitekeys)
-                    )
-                    < size
-                ) and (
-                    abs(
-                        mouse_y
-                        - (prefs.keys_pos[i][1] + prefs.yoffset_whitekeys)
-                    )
-                    < size
-                ):
+                # Get screen position for hit testing
+                key_screen_x, key_screen_y = self.appView.get_key_screen_position(i)
+                
+                if key_screen_x == -1:
+                    continue
+                    
+                if abs(mouse_x - key_screen_x) < size and abs(mouse_y - key_screen_y) < size:
                     self.keygrab = 2
+                    # Store the offset in video space
                     self.keygrabaddx = prefs.keys_pos[i][0]
-                    logger.debug("ok click found on : " + str(self.keygrabid))
+                    logger.debug(f"Right-click grabbed key: {i}")
                     break
     
     def loadsettings(self, cfgfile: str):
