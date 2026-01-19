@@ -22,6 +22,7 @@ def savesettings(settingsfile: str) -> None:
 	config.set(section, 'octave', str(int(prefs.octave)))
 	config.set(section, 'output_midi_tempo', str(int(prefs.tempo)))
 	config.set(section, 'frame_start', str(int(prefs.startframe)))
+	config.set(section, 'frame_end', str(int(prefs.endframe)))
 	config.set(section, 'blackkey_relative_position', str(float(prefs.blackkey_relative_position)))
 	config.set(section, 'keys_pos_count', str(prefs.keys_pos_cnt))
 	# Sparks
@@ -135,6 +136,8 @@ def loadsettings(cfgfile: str) -> None:
 		prefs.tempo = config.getint(section, 'output_midi_tempo')
 	if config.has_option(section, 'frame_start'):
 		prefs.startframe = config.getint(section, 'frame_start')
+	if config.has_option(section, 'frame_end'):
+		prefs.endframe = config.getint(section, 'frame_end')
 	if config.has_option(section, 'blackkey_relative_position'):
 		prefs.blackkey_relative_position = config.getfloat(section, 'blackkey_relative_position')
 

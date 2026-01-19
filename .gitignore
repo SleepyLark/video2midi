@@ -1,1 +1,7 @@
 *.pyc
+.vscode
+*.mid
+*.ini
+*.mkv
+*.mp4
+*.webm

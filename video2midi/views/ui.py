@@ -243,7 +243,7 @@ class MainWindow:
         # Bounds check against original video dimensions
         if video_x < 0 or video_x >= self.defaultWidth or \
            video_y < 0 or video_y >= self.defaultHeight:
-            return (-1, -1)
+            return None
 
         return (int(video_x), int(video_y))
 
@@ -253,10 +253,10 @@ class MainWindow:
         Transforms from video space to current screen space.
         
         Returns:
-            (screen_x, screen_y) or (-1, -1) if out of bounds
+            (screen_x, screen_y) or None if out of bounds
         """
         if key_index >= len(prefs.keys_pos):
-            return (-1, -1)
+            return None
             
         # Get key position in video space (with offsets)
         video_x = prefs.xoffset_whitekeys + prefs.keys_pos[key_index][0]
@@ -281,7 +281,7 @@ class MainWindow:
         for i in range(len(prefs.keys_pos)):
             # Get pixel position in original video for sampling
             pix_pos = self.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
-            if pix_pos == (-1, -1):
+            if pix_pos is None:
                 continue
 
             # Sample the pixel color at key position
@@ -298,7 +298,7 @@ class MainWindow:
                         prefs.keys_pos[i][0],
                         prefs.keyp_spark_y_pos - spark_y_add_pos
                     )
-                    if sparkpixpos != (-1, -1):
+                    if sparkpixpos is not None:
                         spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
                         # FIX: Convert to int here too
                         sparkkey[0] += int(spark_bgr[2])
@@ -416,9 +416,11 @@ class MainWindow:
             keypressed, pressedcolor = key_states.get(i, (0, [0, 0, 0]))
 
             # Get screen position for this key
-            screen_x, screen_y = self.get_key_screen_position(i)
-            if screen_x == -1 and screen_y == -1:
+            screen_pos = self.get_key_screen_position(i)
+            if screen_pos is None:
                 continue
+    
+            screen_x, screen_y = screen_pos  
 
             glPushMatrix()
             glTranslatef(screen_x, screen_y, 0)

@@ -62,7 +62,7 @@ class VideoHandler:
         if self.image is None:
             return None
         self.get_frame(idframe)
-        logger.debug(f"Load image from video {self.video_width}x{self.video_height} frame: {idframe}")
+        # logger.debug(f"Load image from video {self.video_width}x{self.video_height} frame: {idframe}")
         
         return self.image
         

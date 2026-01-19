@@ -22,6 +22,11 @@ import pygame
 
 class AppController:
     def __init__(self):
+
+        self.use_snap_notes_to_grid = False
+        self.notes_grid_size = 32
+        self.showoutputpath = 0  # Timestamp for showing output message
+
         self.filepath = get_video_filepath()
 
         self.outputmid = ntpath.basename(self.filepath) + "_output.mid"
@@ -53,6 +58,8 @@ class AppController:
 
     def start(self):
         self.loadsettings(self.inifile)
+        if prefs.endframe <= prefs.startframe:
+            prefs.endframe = self.video.length
 
         while self.running:
             self.handle_events()
@@ -241,10 +248,11 @@ class AppController:
             
             for i in range(len(prefs.keys_pos)):
                 # Get screen position for hit testing
-                key_screen_x, key_screen_y = self.appView.get_key_screen_position(i)
-                
-                if key_screen_x == -1:
+                screen_pos = self.appView.get_key_screen_position(i)
+                if screen_pos is None:
                     continue
+
+                key_screen_x, key_screen_y = screen_pos
                     
                 if abs(mouse_x - key_screen_x) < size and abs(mouse_y - key_screen_y) < size:
                     self.separate_note_id = i
@@ -308,10 +316,11 @@ class AppController:
                 
             for i in range(len(prefs.keys_pos)):
                 # Get screen position of this key for hit testing
-                key_screen_x, key_screen_y = self.appView.get_key_screen_position(i)
-                
-                if key_screen_x == -1:
+                screen_pos = self.appView.get_key_screen_position(i)
+                if screen_pos is None:
                     continue
+                    
+                key_screen_x, key_screen_y = screen_pos
                     
                 # Check if mouse is near this key (in screen space)
                 if abs(mouse_x - key_screen_x) < size and abs(mouse_y - key_screen_y) < size:
@@ -359,11 +368,31 @@ class AppController:
         self.appView.resize_window()
 
     def start_recreate_midi(self, sender):
-        if prefs.autoclose == 1:
+        if prefs.autoclose is True:
             self.running = False
         else:
-            # reconstruct()
-            pass
+            self.reconstruct()
+
+    def reconstruct(self):
+        """Wrapper for MIDI reconstruction process"""
+        import time
+        
+        self.appView.helpWindow.hidden = True
+        t1 = time.time()
+        
+        status = self.midiHandler.process_midi(self)
+        
+        t2 = time.time()
+        logger.info(f"Processing time: {t2 - t1:.2f} seconds")
+        
+        # Reset to start frame
+        self.video.currentFrame = prefs.startframe
+        self.appView.loadImage(self.video.get_image(prefs.startframe))
+        
+        # Show output message for 5 seconds
+        self.showoutputpath = time.time() + 5
+        
+        return status
 
 
 # === UI link ===
@@ -378,8 +407,8 @@ class AppController:
         logger.debug(f"set start frame = {prefs.startframe}")
 
     def set_end_frame_to_current_frame(self, sender):
-        endframe = self.video.get_current_frame_int()
-        logger.debug(f"set end frame = {endframe}")
+        prefs.endframe = self.video.get_current_frame_int()
+        logger.debug(f"set end frame = {prefs.endframe}")
 
     def switch_notes_overlap(self, sender):
         if sender is None:
@@ -506,58 +535,10 @@ class AppController:
 
     def update_blackkey_relative_position(self, sender, value):
         prefs.blackkey_relative_position = value * 0.001
-        self.update_key_positions()
+        self.midiHandler.update_key_positions()
 
     def update_sync_notes_start_pos_time_delta(self,sender, value):
         prefs.sync_notes_start_pos_time_delta = value * 0.001
-
-    def update_key_positions(append=False):
-        current_x = 0
-        if append:
-            logger.debug(f"clear keys, set to {prefs.keys_pos_cnt}")
-            prefs.keys_pos = []
-
-        for key_index in range(prefs.keys_pos_cnt):
-            octave_index = key_index // 12
-            semitone_index = key_index % 12
-            if (append) or (
-                octave_index * 12 + semitone_index > len(prefs.keys_pos) - 1
-            ):
-                prefs.keys_pos.append([0, 0])
-            prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(
-                round(current_x)
-            )
-            prefs.keys_pos[octave_index * 12 + semitone_index][1] = 0
-            if self.midiHandler.is_black_key(semitone_index):
-                prefs.keys_pos[octave_index * 12 + semitone_index][
-                    1
-                ] = prefs.yoffset_blackkeys
-                current_x += -prefs.whitekey_width
-            if (semitone_index == 1) or (semitone_index == 6):
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(
-                    round(
-                        current_x
-                        + prefs.whitekey_width * prefs.blackkey_relative_position
-                    )
-                )
-            if semitone_index == 8:
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(
-                    round(current_x + prefs.whitekey_width * 0.5)
-                )
-            if (semitone_index == 3) or (semitone_index == 10):
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(
-                    round(
-                        current_x
-                        + prefs.whitekey_width
-                        * (1.0 - prefs.blackkey_relative_position)
-                    )
-                )
-            current_x += prefs.whitekey_width
-        for octave_index in range(len(prefs.keys_pos)):
-            prefs.keys_pos[octave_index] = v_rotate(
-                prefs.keys_pos[octave_index], prefs.keys_angle
-            )
-            prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
     def onPallete_click(self, sender, index):
         self.appView.update_selected_color_delta(sender, index)
