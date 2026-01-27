@@ -109,7 +109,7 @@ class MidiHandler:
             midiOutFile.addProgramChange(track, prefs.keyp_colors_channel[i], prefs.keyp_colors_channel_prog[i])
 
         logger.info(f"Starting from frame: {prefs.startframe}")
-        video.get_image(prefs.startframe)
+        img = video.get_image(prefs.startframe)
         notecnt = 0
 
         # Reset note states
@@ -122,11 +122,6 @@ class MidiHandler:
 
         current_frame = prefs.startframe
         success = True
-
-        # =========================================================================
-        # OPTIMIZATION: Pre-calculate all pixel coordinates before the loop
-        # This removes millions of function calls and math operations
-        # =========================================================================
         
         # 1. Pre-calc Main Key Positions
         cached_key_pixels = []
@@ -158,16 +153,19 @@ class MidiHandler:
 
         # Cache length for speed
         num_keys = len(prefs.keys_pos)
-        
-        # =========================================================================
-        # MAIN LOOP
-        # =========================================================================
-        
+
+        # detection loop
         while success and current_frame <= prefs.endframe:
-            # Update display every 10 frames (UI update is slow, don't do it every frame)
+            # TODO: REMOVE REFERENCES TO APPVIEW
+            # Update display every 10 frames
             if (current_frame % 10 == 0):
                 progress = current_frame / (prefs.endframe if prefs.endframe > 0 else 1)
                 logger.info(f"Processing frame: {current_frame} / {prefs.endframe} ({int(progress * 100)}%)")
+                appView.loadImage(img)
+                appView.draw_processing_progress(current_frame - prefs.startframe, 
+                                        prefs.endframe - prefs.startframe)
+        
+                pygame.event.pump()
                 
                 # Check for abort only periodically to save time
                 for event in pygame.event.get():

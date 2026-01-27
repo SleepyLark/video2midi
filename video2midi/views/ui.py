@@ -503,6 +503,50 @@ class MainWindow:
 
         glDisable(GL_BLEND)
 
+    def draw_processing_progress(self, current_frame, total_frames):
+        """Draws a progress bar and updates the frame during MIDI reconstruction."""
+        # 1. Clear and setup ortho
+        # === SETUP ===
+        glClear(GL_COLOR_BUFFER_BIT)
+        glLoadIdentity()
+        glDisable(GL_DEPTH_TEST)
+
+        # === DRAW VIDEO BACKGROUND ===
+        glEnable(GL_TEXTURE_2D)
+        
+        glBindTexture(GL_TEXTURE_2D, Gl.bgImgGL)
+        glColor4f(1, 1, 1, 1)
+        DrawQuad(self.video_offset_x, self.video_offset_y, 
+                 self.video_offset_x + self.video_draw_w, 
+                 self.video_offset_y + self.video_draw_h)
+
+        # === KEY DETECTION & RENDERING ===
+        detected_keys = self.detect_key_presses()
+        self.apply_rollcheck_filter(detected_keys)
+        
+        # Update MIDI handler with current states
+        for i, keypressed, _ in detected_keys:
+            self.app.midiHandler.notes_tmp[i] = keypressed
+        
+        # Draw visual overlays
+        self.draw_key_overlays(detected_keys)
+
+        # 4. Draw Progress Bar background (Dark Gray)
+        bar_height = 20
+        glDisable(GL_TEXTURE_2D)
+        glColor3f(0.2, 0.2, 0.2)
+        DrawQuad(0, self.height - bar_height, self.width, self.height)
+    
+        # 5. Draw Progress Bar fill (Green)
+        progress = current_frame / (total_frames if total_frames > 0 else 1)
+        glColor3f(0.0, 0.8, 0.0)
+        DrawQuad(0, self.height - bar_height, self.width * progress, self.height)
+        
+        glEnable(GL_TEXTURE_2D)
+        
+        # 6. Push to screen
+        pygame.display.flip()
+
     def drawframe(self):
         """Main rendering function - draws everything each frame."""
         if self.currentImage is None:
