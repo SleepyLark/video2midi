@@ -38,7 +38,7 @@ class AppController:
 
         self.video = VideoHandler(self.filepath)
         self.appView = MainWindow(
-            self, self.filepath, self.video.get_image()
+            self, self.filepath, self.video.get_image(0)
         )
 
         self.endframe = self.video.length
@@ -386,7 +386,6 @@ class AppController:
         logger.info(f"Processing time: {t2 - t1:.2f} seconds")
         
         # Reset to start frame
-        self.video.currentFrame = prefs.startframe
         self.appView.loadImage(self.video.get_image(prefs.startframe))
         
         # Show output message for 5 seconds
@@ -463,15 +462,15 @@ class AppController:
         self.midiHandler.basenote = prefs.octave * 12
 
     def scroll_by_steps(self, steps):
-        self.video.currentFrame += steps
+        currentFrame = self.video.get_current_frame_int() - 1  + steps
 
-        if self.video.currentFrame > self.video.length * 0.99:
-            self.video.currentFrame = math.trunc(self.video.length * 0.99)
+        if currentFrame > self.video.length * 0.99:
+            currentFrame = math.trunc(self.video.length * 0.99)
 
-        if self.video.currentFrame < 1:
-            self.video.currentFrame = 1
+        if currentFrame < 1:
+            currentFrame = 1
 
-        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
+        self.appView.loadImage(self.video.get_image(currentFrame))
 
     def scroll_forward_by_frame(self, sender):
         self.scroll_by_steps(1)
@@ -486,12 +485,12 @@ class AppController:
         self.scroll_by_steps(-100)
 
     def scroll_to_start(self, sender):
-        self.video.currentFrame = 0
-        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
+        currentFrame = 0
+        self.appView.loadImage(self.video.get_image(currentFrame))
 
     def scroll_to_end(self, sender):
-        self.video.currentFrame = self.video.length - 100
-        self.appView.loadImage(self.video.get_image(self.video.currentFrame))
+        currentFrame = self.video.length - 100
+        self.appView.loadImage(self.video.get_image(currentFrame))
 
     def rotate_cw(self,sender):
         prefs.keys_angle -= 5

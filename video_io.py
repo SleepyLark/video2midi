@@ -18,7 +18,6 @@ class VideoHandler:
         self.video_width = int(self.vidcap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_height = int(self.vidcap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.fps = float(self.vidcap.get(cv2.CAP_PROP_FPS))
-        self.currentFrame = 0
         self.success = False
         self.image = None
         self.convertCvtColor = True
@@ -36,36 +35,27 @@ class VideoHandler:
     def get_frame(self, framenum=-1):
         if self.fps == 0:
             return
-        goto_frame_by_msec = False
+
         if framenum != -1:
-            if goto_frame_by_msec:
-                oldframenum = self.get_current_frame_int()
-                frametime = framenum * 1000.0 / self.fps
-                self.success = self.vidcap.set(cv2.CAP_PROP_POS_MSEC, frametime)
-
-                if not self.success:
-                    self.success = self.vidcap.set(cv2.CAP_PROP_POS_FRAMES, oldframenum)
-            else:
-                self.success = self.vidcap.set(cv2.CAP_PROP_POS_FRAMES, framenum)
-
-            curframe = self.vidcap.get(cv2.CAP_PROP_POS_FRAMES)
-
-            if curframe != framenum:
-                logger.debug(f"OpenCV bug, Requesting frame {framenum} but get position on {curframe}")
+            self.success = self.vidcap.set(cv2.CAP_PROP_POS_FRAMES, framenum)
 
         self.success, self.image = self.vidcap.read()
 
         return self.success, self.image
 
-    def get_image(self, idframe=130):
+    def get_image(self, frame):
         """image is a NumPy array with the shape [height, width, channels]"""
-        if self.image is None:
-            return None
-        self.get_frame(idframe)
-        # logger.debug(f"Load image from video {self.video_width}x{self.video_height} frame: {idframe}")
+        self.get_frame(frame)
+        # logger.debug(f"Load image from video {self.video_width}x{self.video_height} frame: {frame}")
         
         return self.image
         
     def get_current_frame_int(self) -> int:
         return int(round(self.vidcap.get(cv2.CAP_PROP_POS_FRAMES)))
+    
+    def read_next_frame(self):
+        """Reads the next frame sequentially rather than call the more expensive "seek" function from get_frame"""
+        self.success, self.image = self.vidcap.read()
+    
+        return self.image
 

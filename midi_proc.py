@@ -87,30 +87,31 @@ class MidiHandler:
     def process_midi(self, app_controller):
         """Process the video frame by frame and generate MIDI file."""
         import pygame
-        
+        import numpy as np
+
         logger.info("Starting MIDI reconstruction...")
-        
+
         # Get references from controller
         video = app_controller.video
         appView = app_controller.appView
-        
+
         # Setup MIDI file
         self.basenote = prefs.octave * 12
         midiOutFile = midinotes(int(self.midi_file_format))
         track = 0
         time = 0
-        
+
         midiOutFile.setup_track(time, prefs.miditrackname, prefs.tempo)
         first_note_time = 0
-        
-        # Initialize program changes for each channel
+
+        # Initialize program changes
         for i in range(len(prefs.keyp_colors_channel)):
             midiOutFile.addProgramChange(track, prefs.keyp_colors_channel[i], prefs.keyp_colors_channel_prog[i])
-        
+
         logger.info(f"Starting from frame: {prefs.startframe}")
         video.get_image(prefs.startframe)
         notecnt = 0
-        
+
         # Reset note states
         for i in range(144):
             self.notes[i] = 0
@@ -118,53 +119,111 @@ class MidiHandler:
             self.notes_de[i] = 0
             self.notes_channel[i] = 0
             self.notes_tmp[i] = 0
-        
+
         current_frame = prefs.startframe
         success = True
+
+        # =========================================================================
+        # OPTIMIZATION: Pre-calculate all pixel coordinates before the loop
+        # This removes millions of function calls and math operations
+        # =========================================================================
+        
+        # 1. Pre-calc Main Key Positions
+        cached_key_pixels = []
+        for i in range(len(prefs.keys_pos)):
+            # Calculate pixel position ONCE
+            pix = appView.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
+            cached_key_pixels.append(pix) # Stores (x, y) or None
+
+        # 2. Pre-calc Spark Slices (Vectorization setup)
+        # Instead of a loop for sparks, we will use numpy array slicing
+        cached_spark_slices = []
+        use_sparks = prefs.use_sparks
+        if use_sparks:
+            sh = max(1, int(appView.sparksWindow.sparks_slider_height.value))
+            for i in range(len(prefs.keys_pos)):
+                # We need the top and bottom Y coordinates of the spark column
+                # Note: 'spark_y_add_pos' subtraction implies we go UP the image (lower Y index)
+                # We calculate the range [y_start, y_end]
+                p_start = appView.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keyp_spark_y_pos)
+                p_end   = appView.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keyp_spark_y_pos - sh + 1)
+                
+                if p_start and p_end:
+                    # Numpy slices need y_min:y_max. p_end is physically higher (lower index)
+                    y_min = min(p_start[1], p_end[1])
+                    y_max = max(p_start[1], p_end[1]) + 1 # +1 for exclusive upper bound
+                    cached_spark_slices.append((p_start[0], y_min, y_max))
+                else:
+                    cached_spark_slices.append(None)
+
+        # Cache length for speed
+        num_keys = len(prefs.keys_pos)
+        
+        # =========================================================================
+        # MAIN LOOP
+        # =========================================================================
         
         while success and current_frame <= prefs.endframe:
-            # Update display every 10 frames
+            # Update display every 10 frames (UI update is slow, don't do it every frame)
             if (current_frame % 10 == 0):
-                progress = current_frame / prefs.endframe
+                progress = current_frame / (prefs.endframe if prefs.endframe > 0 else 1)
                 logger.info(f"Processing frame: {current_frame} / {prefs.endframe} ({int(progress * 100)}%)")
+                
+                # Check for abort only periodically to save time
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        success = False
+                        pygame.quit()
+                        quit()
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_SPACE:
+                            logger.info("User aborted MIDI reconstruction")
+                            success = False
+                            break
+
+            # --- FRAME PROCESSING ---
             
-            # Process each key
-            for i in range(len(prefs.keys_pos)):
-                pixpos = appView.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
+            # Access the numpy image directly
+            # Ensure we have a valid image
+            if video.image is None:
+                break
                 
-                # CRITICAL FIX: Check MUST be here and MUST continue
+            img = video.image 
+            
+            for i in range(num_keys):
+                # OPTIMIZATION: Use cached pixel coordinate
+                pixpos = cached_key_pixels[i]
+                
                 if pixpos is None:
-                    # logger.debug(f"Key {i} out of bounds at frame {current_frame}")
                     continue
-                
-                # Now pixpos is guaranteed to be a valid tuple
+
+                # Direct NumPy access (Faster than try/except inside loop)
+                # pixpos is (x, y). Img is [y, x]
                 try:
-                    keybgr = video.image[pixpos[1], pixpos[0]]
+                    # Get BGR color
+                    keybgr = img[pixpos[1], pixpos[0]]
+                    # Convert to [R, G, B]
                     key = [int(keybgr[2]), int(keybgr[1]), int(keybgr[0])]
-                except (IndexError, TypeError) as e:
-                    logger.warning(f"Error sampling key {i} at {pixpos}: {e}")
+                except IndexError:
                     continue
-                
-                # Sample spark if enabled
+
+                # OPTIMIZATION: Vectorized Spark Sampling
                 sparkkey = [0, 0, 0]
-                if prefs.use_sparks:
-                    sh = max(1, int(appView.sparksWindow.sparks_slider_height.value))
-                    for spark_y_add_pos in range(sh):
-                        sparkpixpos = appView.getkeyp_pixel_pos(
-                            prefs.keys_pos[i][0],
-                            prefs.keyp_spark_y_pos - spark_y_add_pos
-                        )
-                        if sparkpixpos is not None:
-                            try:
-                                spark_bgr = video.image[sparkpixpos[1], sparkpixpos[0]]
-                                sparkkey[0] += int(spark_bgr[2])
-                                sparkkey[1] += int(spark_bgr[1])
-                                sparkkey[2] += int(spark_bgr[0])
-                            except (IndexError, TypeError) as e:
-                                logger.warning(f"Error sampling spark for key {i}: {e}")
-                                continue
-                    
-                    sparkkey = [int(sparkkey[0] / sh), int(sparkkey[1] / sh), int(sparkkey[2] / sh)]
+                if use_sparks:
+                    sl = cached_spark_slices[i] # (x, y_min, y_max)
+                    if sl:
+                        try:
+                            # Slicing: Extract the vertical column of pixels at once
+                            # img[y_min:y_max, x] returns shape (height, 3)
+                            spark_area = img[sl[1]:sl[2], sl[0]]
+                            
+                            if spark_area.size > 0:
+                                # Calculate mean color across the vertical slice
+                                # axis=0 averages down the column
+                                avg_bgr = np.mean(spark_area, axis=0)
+                                sparkkey = [int(avg_bgr[2]), int(avg_bgr[1]), int(avg_bgr[0])]
+                        except IndexError:
+                            pass
                 
                 note = i
                 if note > 144:
@@ -207,7 +266,7 @@ class MidiHandler:
                             
                             keypressed = 1
                             
-                            if prefs.use_sparks:
+                            if use_sparks:
                                 spark_delta = prefs.keyp_colors_sparks_sensitivity[j]
                                 has_spark_delta = (
                                     (sparkkey[0] - keyc[0]) > spark_delta or
@@ -240,23 +299,28 @@ class MidiHandler:
             
             # Apply rollcheck filter
             if prefs.rollcheck:
-                for i in range(1, len(prefs.keys_pos) - 1):
+                # Optimized rollcheck: direct list access, no function calls
+                for i in range(1, num_keys - 1):
                     if self.notes[i] != 0:
+                        # Pre-calculating black key check is hard here without cached boolean, 
+                        # but this logic is fast enough as-is usually.
+                        is_black = self.is_black_key(i)
+                        
                         if prefs.rollcheck_priority == 0:
-                            if not self.is_black_key(i):
+                            if not is_black:
                                 if self.notes[i + 1] > 0 and self.notes_tmp[i] > 0:
                                     self.notes[i] = 0
                                 if self.notes[i - 1] > 0 and self.notes_tmp[i] > 0:
                                     self.notes[i] = 0
                         else:
-                            if self.is_black_key(i):
+                            if is_black:
                                 if self.notes[i + 1] > 0 and self.notes_tmp[i] > 0:
                                     self.notes[i] = 0
                                 if self.notes[i - 1] > 0 and self.notes_tmp[i] > 0:
                                     self.notes[i] = 0
             
             # Process note on/off events
-            for i in range(len(prefs.keys_pos)):
+            for i in range(num_keys):
                 note = i
                 keypressed = self.notes[note]
                 
@@ -323,25 +387,10 @@ class MidiHandler:
                             self.notes_db[note] = current_frame
                             self.notes_channel[note] = note_channel
             
-            # Check for abort
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    success = False
-                    pygame.quit()
-                    quit()
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        logger.info("User aborted MIDI reconstruction")
-                        success = False
-                    if event.key == pygame.K_ESCAPE:
-                        app_controller.running = False
-                        pygame.quit()
-                        quit()
-            
             # Next frame
             current_frame += 1
             if current_frame <= prefs.endframe:
-                video.get_image(current_frame)
+                video.read_next_frame()
         
         logger.info(f"Saved {notecnt} notes")
         
