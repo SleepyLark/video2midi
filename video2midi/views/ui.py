@@ -30,8 +30,9 @@ class MainWindow:
 
         frame_w = first_frame.shape[1]
         frame_h = first_frame.shape[0]
-        self.defaultWidth = frame_w
-        self.defaultHeight = frame_h
+        # default is set to video's original resolution
+        self.default_width = frame_w
+        self.default_height = frame_h
         self.currentImage = None
         self.renderedFrame = None
         self.screen = None
@@ -49,10 +50,11 @@ class MainWindow:
         
         self.width, self.height = self.get_best_window_size(frame_w, frame_h)
         self.flags = pygame.RESIZABLE | pygame.OPENGL | pygame.DOUBLEBUF
+
         self.screen = pygame.display.set_mode((self.width, self.height), self.flags)
         pygame.display.set_caption(project_name)
         
-        # Now it's safe to initialize GL objects
+        # Initialize GL objects
         doinitGl()
         self.reshape(self.width, self.height)
         self.loadImage(first_frame)
@@ -133,7 +135,7 @@ class MainWindow:
 
         # Update video display transform
         self.video_draw_w, self.video_draw_h, self.video_offset_x, self.video_offset_y = \
-            self.get_aspect_fit_size(self.defaultWidth, self.defaultHeight, w, h)
+            self.get_aspect_fit_size(self.default_width, self.default_height, w, h)
 
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
@@ -151,20 +153,21 @@ class MainWindow:
         self.reshape()
 
     def update_size(self) -> None:
+        """Switch window size between config settings and what's the best screen resolution"""
         if prefs.resize:
-            new_w = prefs.resize_width
-            new_h = prefs.resize_height
-            logger.debug(f"Prefs resize -> {new_w}x{new_h}")
+            updated_w = prefs.resize_width
+            updated_h = prefs.resize_height
+            logger.debug(f"Prefs resize -> {updated_w}x{updated_h}")
         else:
-            new_w = self.defaultWidth
-            new_h = self.defaultHeight
-            logger.debug(f"Default video size -> {new_w}x{new_h}")
+            updated_w = self.default_width
+            updated_h = self.default_height
+            logger.debug(f"Default video size -> {updated_w}x{updated_h}")
 
-            best_w, best_h = self.get_best_window_size(new_w, new_h)
-            new_w, new_h = best_w, best_h
-            logger.debug(f"Fitted to screen -> {new_w}x{new_h}")
+            best_w, best_h = self.get_best_window_size(updated_w, updated_h)
+            updated_w, updated_h = best_w, best_h
+            logger.debug(f"Fitted to screen -> {updated_w}x{updated_h}")
 
-        self.width, self.height = new_w, new_h
+        self.width, self.height = updated_w, updated_h
 
     def loadImage(self, image):
         """Upload the video frame to the GPU as a texture."""
@@ -195,8 +198,8 @@ class MainWindow:
             screen_x, screen_y: Coordinates in current window space
         """
         # Scale factor from video to displayed video
-        scale_x = self.video_draw_w / self.defaultWidth
-        scale_y = self.video_draw_h / self.defaultHeight
+        scale_x = self.video_draw_w / self.default_width
+        scale_y = self.video_draw_h / self.default_height
         
         # Apply scale and offset
         screen_x = video_x * scale_x + self.video_offset_x
@@ -220,8 +223,8 @@ class MainWindow:
         y = screen_y - self.video_offset_y
         
         # Scale back to video resolution
-        scale_x = self.defaultWidth / self.video_draw_w
-        scale_y = self.defaultHeight / self.video_draw_h
+        scale_x = self.default_width / self.video_draw_w
+        scale_y = self.default_height / self.video_draw_h
         
         video_x = x * scale_x
         video_y = y * scale_y
@@ -241,8 +244,8 @@ class MainWindow:
         video_y = prefs.yoffset_whitekeys + y
 
         # Bounds check against original video dimensions
-        if video_x < 0 or video_x >= self.defaultWidth or \
-           video_y < 0 or video_y >= self.defaultHeight:
+        if video_x < 0 or video_x >= self.default_width or \
+           video_y < 0 or video_y >= self.default_height:
             return None
 
         return (int(video_x), int(video_y))
@@ -286,7 +289,7 @@ class MainWindow:
 
             # Sample the pixel color at key position
             keybgr = self.currentImage[pix_pos[1], pix_pos[0]]
-            # FIX: Convert numpy values to Python ints to avoid overflow warnings
+            # Convert numpy values to Python ints to avoid overflow warnings
             key = [int(keybgr[2]), int(keybgr[1]), int(keybgr[0])]  # BGR to RGB
 
             # Spark-level sampling (for fade detection)
@@ -300,12 +303,12 @@ class MainWindow:
                     )
                     if sparkpixpos is not None:
                         spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
-                        # FIX: Convert to int here too
+            
                         sparkkey[0] += int(spark_bgr[2])
                         sparkkey[1] += int(spark_bgr[1])
                         sparkkey[2] += int(spark_bgr[0])
 
-                # FIX: Convert to int after averaging
+                # Convert to int after averaging
                 sparkkey = [int(sparkkey[0] / sh), int(sparkkey[1] / sh), int(sparkkey[2] / sh)]
 
             if i > 144:
