@@ -405,8 +405,8 @@ class MainWindow:
         glDisable(GL_TEXTURE_2D)
 
         # Calculate scale factors for key size
-        scale_x = self.video_draw_w / self.defaultWidth
-        scale_y = self.video_draw_h / self.defaultHeight
+        scale_x = self.video_draw_w / self.width
+        scale_y = self.video_draw_h / self.height
         scale = min(scale_x, scale_y)  # Use uniform scale for keys
 
         # Convert detected_keys to dict for easier lookup
