@@ -1,5 +1,5 @@
 import logging
-from controller import AppController
+from src.controller import AppController
 
 # change level to logging.INFO for deployment
 logging.basicConfig(level=logging.DEBUG)

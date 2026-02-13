@@ -1,14 +1,17 @@
-from ..prefs import prefs
-from ..settings import *
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from .gl import *
 
+if TYPE_CHECKING:
+    from ..controller import AppController
+
 class ExtraWindow(GLWindow):
-    def __init__(self, app, x, y, w, h):
+    def __init__(self, app: AppController, x, y, w, h):
         super().__init__(x, y, w, h, "Extra/Experimental")
         self.root = self
         self.app = app
 
-        self.extra_label1 = GLLabel(6,0,  "Use alternate:"+str(prefs.use_alternate_keys)  )
+        self.extra_label1 = GLLabel(6,0,  "Use alternate:"+str(self.app.prefs.use_alternate_keys)  )
         self.root.appendChild( self.extra_label1 )
         extra_label3 = GLLabel( 6,90,  """to select the key press ctrl + left mouse button on the key rect.
 to deselect the key press ctrl + left mouse button on empty space.""" )

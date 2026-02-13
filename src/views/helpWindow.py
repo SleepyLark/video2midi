@@ -1,5 +1,3 @@
-from ..prefs import prefs
-from ..settings import *
 from .gl import *
 
 class HelpWindow(GLWindow):

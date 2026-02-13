@@ -6,11 +6,9 @@ Handles MIDI file creation, note extraction, and saving.
 # MIDI processing logic for video2midi
 import os
 import ntpath
-import datetime
 import math
-from video2midi.prefs import prefs
-from video2midi.models.midi import *
-from utils import *
+from src.prefs import prefs
+from src.models.midi import midinotes
 
 import logging
 logger = logging.getLogger(__name__)
@@ -81,7 +79,7 @@ class MidiHandler:
                 prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
             current_x += prefs.whitekey_width
         for octave_index in range(len(prefs.keys_pos)):
-            prefs.keys_pos[octave_index] = v_rotate(prefs.keys_pos[octave_index], prefs.keys_angle)
+            prefs.keys_pos[octave_index] = self.v_rotate(prefs.keys_pos[octave_index], prefs.keys_angle)
             prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
     def process_midi(self, app_controller):
@@ -331,9 +329,9 @@ class MidiHandler:
                         duration = (current_frame - self.notes_db[note]) / video.fps
                         
                         if app_controller.use_snap_notes_to_grid:
-                            time_val = snap_to_grid(time_val - first_note_time, 
+                            time_val = self.snap_to_grid(time_val - first_note_time, 
                                                 app_controller.notes_grid_size) + 1
-                            duration = snap_to_grid(duration, app_controller.notes_grid_size)
+                            duration = self.snap_to_grid(duration, app_controller.notes_grid_size)
                         
                         ignore = False
                         if duration < prefs.minimal_duration:
@@ -362,9 +360,9 @@ class MidiHandler:
                         if app_controller.use_snap_notes_to_grid:
                             if first_note_time == 0:
                                 first_note_time = time_val
-                            time_val = snap_to_grid(time_val - first_note_time,
+                            time_val = self.snap_to_grid(time_val - first_note_time,
                                                 app_controller.notes_grid_size) + 1
-                            duration = snap_to_grid(duration, app_controller.notes_grid_size)
+                            duration = self.snap_to_grid(duration, app_controller.notes_grid_size)
                         
                         ignore = False
                         if duration < prefs.minimal_duration:
@@ -412,3 +410,15 @@ class MidiHandler:
         logger.info(f"MIDI file saved: {prefs.save_to_disk_message}")
         
         return status
+    
+    def snap_to_grid(self,input_value, input_grid_size):
+        quantized = int((input_value - int(input_value)) * input_grid_size) / input_grid_size
+        result = (quantized + int(input_value))
+        return result
+    
+    def v_rotate(self,v, ang):
+        radAng = ang * math.pi / 180
+        return [
+            (v[1] * math.cos(radAng)) - (v[0] * math.sin(radAng)),
+            (v[1] * math.sin(radAng)) + (v[0] * math.cos(radAng))
+        ]

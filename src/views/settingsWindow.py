@@ -1,9 +1,13 @@
-from ..prefs import prefs
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from ..settings import *
 from .gl import *
 
+if TYPE_CHECKING:
+    from ..controller import AppController
+
 class SettingsWindow(GLWindow):
-    def __init__(self, app, x, y, w, h):
+    def __init__(self, app: AppController, x, y, w, h):
         super().__init__(x, y, w, h, "Settings")
         self.root = self
         self.app = app
@@ -11,8 +15,8 @@ class SettingsWindow(GLWindow):
         self.addButtons()
         self.addSliders()
 
-        self.rollcheck_button.switch_status = prefs.rollcheck
-        self.rollcheck_priority_button.switch_status = prefs.rollcheck_priority
+        self.rollcheck_button.switch_status = self.app.prefs.rollcheck
+        self.rollcheck_priority_button.switch_status = self.app.prefs.rollcheck_priority
 
 
     def addButtons(self):
@@ -28,22 +32,22 @@ class SettingsWindow(GLWindow):
 
         self.root.appendChild( GLButton(200,120 ,140,20,0, [128,128,128],  "Resize window"                     , self.app.switch_resize_windows           , hint = "r - hot key") )
 
-        exit_switch = GLButton(200+141, 120 ,140,20,1, [128,128,128], "Auto-close" ,self.app.change_autoclose,switch=1, switch_status= prefs.autoclose, hint = "exit after the completion of the midi reconstruction" )
+        exit_switch = GLButton(200+141, 120 ,140,20,1, [128,128,128], "Auto-close" ,self.app.change_autoclose,switch=1, switch_status= self.app.prefs.autoclose, hint = "exit after the completion of the midi reconstruction" )
         self.root.appendChild( exit_switch )
 
         self.root.appendChild( GLButton(200    , 140 ,140,20,0, [128,128,128], "Save settings"                  , self.app.btndown_save_settings  , hint = "F2 - hot key, save current settings" ) )
         self.root.appendChild( GLButton(200+141, 140 ,140,20,0, [128,128,128], "Load settings"                  , self.app.btndown_load_settings  , hint = "F3 - hot key, load saved settings" ) )
 
-        self.rollcheck_button = GLButton(200,160 ,140,20,1, [128,128,128], "Single Key Priority" ,self.app.change_rollcheck,switch=1, switch_status=prefs.rollcheck )
+        self.rollcheck_button = GLButton(200,160 ,140,20,1, [128,128,128], "Single Key Priority" ,self.app.change_rollcheck,switch=1, switch_status=self.app.prefs.rollcheck )
         self.root.appendChild(self.rollcheck_button)
 
-        self.root.appendChild( GLButton(200+141, 160 ,140,20,1, [128,128,128], "Per channel save" ,self.app.change_save_to_disk_per_channel,switch=1, switch_status= prefs.save_to_disk_per_channel, hint = "split the output midi per channels" ) )
+        self.root.appendChild( GLButton(200+141, 160 ,140,20,1, [128,128,128], "Per channel save" ,self.app.change_save_to_disk_per_channel,switch=1, switch_status= self.app.prefs.save_to_disk_per_channel, hint = "split the output midi per channels" ) )
 
-        self.rollcheck_priority_button = GLButton(200,180 ,222,20,1, [128,128,128], "Prioritize White Keys" ,self.app.change_rollcheck_priority,switch=1, switch_status=prefs.rollcheck_priority )
+        self.rollcheck_priority_button = GLButton(200,180 ,222,20,1, [128,128,128], "Prioritize White Keys" ,self.app.change_rollcheck_priority,switch=1, switch_status=self.app.prefs.rollcheck_priority )
         self.root.appendChild(self.rollcheck_priority_button)
 
-        label1 = GLLabel(10,0, "Base octave: " + str(prefs.octave))
-        # + "\nnotes overlap: " + str(prefs.notes_overlap) + "\nignore minimal duration: " + str(prefs.ignore_minimal_duration))
+        label1 = GLLabel(10,0, "Base octave: " + str(self.app.prefs.octave))
+        # + "\nnotes overlap: " + str(self.app.prefs.notes_overlap) + "\nignore minimal duration: " + str(self.app.prefs.ignore_minimal_duration))
         self.root.appendChild(label1)
 
         self.root.appendChild( GLButton(130,0 ,20,20,1, [128,128,128],  "+", self.app.raise_octave, hint = "] - hot key, move up base octave (+12 tones)" ) )
@@ -79,30 +83,30 @@ class SettingsWindow(GLWindow):
 
 
     def addSliders(self):
-        self.key_sensitivity_slider = GLSpinBox(10,40, 81,18, 0,130,prefs.keyp_delta,label="Detection Sensitivity")
+        self.key_sensitivity_slider = GLSpinBox(10,40, 81,18, 0,130,self.app.prefs.keyp_delta,label="Detection Sensitivity")
         self.key_sensitivity_slider.round=1
         self.root.appendChild(self.key_sensitivity_slider)
 
-        self.minimal_duration_slider = GLSpinBox(10,90, 81,18, 0,200,prefs.minimal_duration*100,label="Minimal note duration (sec)")
+        self.minimal_duration_slider = GLSpinBox(10,90, 81,18, 0,200,self.app.prefs.minimal_duration*100,label="Minimal note duration (sec)")
         self.minimal_duration_slider.round=0
         self.root.appendChild(self.minimal_duration_slider)
 
-        self.tempo_slider = GLSpinBox(10,133, 81,18, 30,240,prefs.tempo,label="Output tempo for MIDI")
+        self.tempo_slider = GLSpinBox(10,133, 81,18, 30,240,self.app.prefs.tempo,label="Output tempo for MIDI")
         self.tempo_slider.round=0
         self.root.appendChild(self.tempo_slider)
 
-        self.midi_format_slider = GLSpinBox(10,175, 81,18, 1,2,prefs.midi_file_format,label="Output MIDI format type")
+        self.midi_format_slider = GLSpinBox(10,175, 81,18, 1,2,self.app.prefs.midi_file_format,label="Output MIDI format type")
         self.midi_format_slider.round=0
         self.root.appendChild(self.midi_format_slider)
 
-        self.black_key_relative_pos_slider = GLSpinBox(10,215, 81,18, 0,1000,prefs.blackkey_relative_position * 1000, update_func=self.app.update_blackkey_relative_position, label="Black key relative pos")
+        self.black_key_relative_pos_slider = GLSpinBox(10,215, 81,18, 0,1000,self.app.prefs.blackkey_relative_position * 1000, update_func=self.app.update_blackkey_relative_position, label="Black key relative pos")
         self.black_key_relative_pos_slider.round=0
         self.root.appendChild(self.black_key_relative_pos_slider)
 
-        self.notes_time_delta_slider = GLSpinBox(10,255, 81,18, 0,1000,prefs.sync_notes_start_pos_time_delta, update_func=self.app.update_sync_notes_start_pos_time_delta, label="Sync notes time delta (ms)")
+        self.notes_time_delta_slider = GLSpinBox(10,255, 81,18, 0,1000,self.app.prefs.sync_notes_start_pos_time_delta, update_func=self.app.update_sync_notes_start_pos_time_delta, label="Sync notes time delta (ms)")
         self.notes_time_delta_slider.round=0
         self.root.appendChild(self.notes_time_delta_slider)
 
-        self.key_count_slider = GLSpinBox(10,295, 81,18, 12,144,prefs.keys_pos_cnt, update_func=self.app.update_keys_pos_cnt, label="Keys count")
+        self.key_count_slider = GLSpinBox(10,295, 81,18, 12,144,self.app.prefs.keys_pos_cnt, update_func=self.app.update_keys_pos_cnt, label="Keys count")
         self.key_count_slider.round=0
         self.root.appendChild(self.key_count_slider)

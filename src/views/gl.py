@@ -7,7 +7,6 @@ import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-from ..prefs import prefs
 
 Label_v_spacer=21
 fontSize=24

@@ -1,12 +1,9 @@
-from video2midi.prefs import prefs
-import video2midi.settings as settings
-from video_io import VideoHandler
-from utils import *
-import os
-from cli import get_video_filepath, get_ini_filepath
-from video2midi.views.ui import MainWindow
-from midi_proc import MidiHandler
-from video2midi.views.gl import Gl
+from src.prefs import prefs
+import src.settings as settings
+from src.models.video_io import VideoHandler
+from src.cli import get_video_filepath, get_ini_filepath
+from src.views.ui import MainWindow
+from src.models.midi_proc import MidiHandler
 
 import logging
 
@@ -14,14 +11,14 @@ logger = logging.getLogger(__name__)
 
 import math
 import ntpath
-import time
-from os.path import expanduser
-from midi_proc import *
+
 import pygame
 
 
 class AppController:
     def __init__(self):
+
+        self.prefs = prefs
 
         self.use_snap_notes_to_grid = False
         self.notes_grid_size = 32

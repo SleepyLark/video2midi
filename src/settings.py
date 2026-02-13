@@ -2,7 +2,7 @@
 import os
 from configparser import ConfigParser
 
-from video2midi.prefs import prefs
+from src.prefs import prefs
 
 
 def savesettings(settingsfile: str) -> None:

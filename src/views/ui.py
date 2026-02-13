@@ -2,30 +2,32 @@
 ui.py - Pygame/OpenGL UI and widget logic for video2midi
 Handles window creation, event loop, and drawing routines with proper coordinate transformation.
 """
-
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import pygame
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from pygame.locals import *
-from ..prefs import prefs
-from ..settings import *
-from .gl import *
-from .settingsWindow import SettingsWindow
-from .colorWindow import ColorWindow
-from .extraWindow import ExtraWindow
-from .sparksWindow import SparksWindow
-from .helpWindow import HelpWindow
+from src.views.gl import *
+from src.views.settingsWindow import SettingsWindow
+from src.views.colorWindow import ColorWindow
+from src.views.extraWindow import ExtraWindow
+from src.views.sparksWindow import SparksWindow
+from src.views.helpWindow import HelpWindow
 import cv2
 import time, math, os, ntpath
 
 import logging
 
+if TYPE_CHECKING:
+    from ..controller import AppController
+
 logger = logging.getLogger(__name__)
 
 
 class MainWindow:
-    def __init__(self, app, project_name, first_frame):
+    def __init__(self, app: AppController, project_name, first_frame):
         self.app = app
 
         frame_w = first_frame.shape[1]
@@ -68,7 +70,7 @@ class MainWindow:
 
         logger.debug("Creating subwindows")
         self.settingsWindow = SettingsWindow(self.app, 24 + 275, 80, 500, 380)
-        wh = ((len(prefs.keyp_colors) // 2) + 2) * 24 - 24
+        wh = ((len(self.app.prefs.keyp_colors) // 2) + 2) * 24 - 24
         self.colorWindow = ColorWindow(self.app, 24, 50, 274, wh)
         self.helpWindow = HelpWindow(self.app, 24 + 270, 50, 750, 535)
         self.extraWindow = ExtraWindow(self.app, 24 + 270 + 550 + 6, 80, 510, 250)
@@ -154,10 +156,10 @@ class MainWindow:
 
     def update_size(self) -> None:
         """Switch window size between config settings and what's the best screen resolution"""
-        if prefs.resize:
-            updated_w = prefs.resize_width
-            updated_h = prefs.resize_height
-            logger.debug(f"Prefs resize -> {updated_w}x{updated_h}")
+        if self.app.prefs.resize:
+            updated_w = self.app.prefs.resize_width
+            updated_h = self.app.prefs.resize_height
+            logger.debug(f"self.app.prefs resize -> {updated_w}x{updated_h}")
         else:
             updated_w = self.default_width
             updated_h = self.default_height
@@ -235,13 +237,13 @@ class MainWindow:
         """
         Convert key position to pixel coordinates in the original image.
         
-        The key positions (prefs.keys_pos) are in video coordinate space,
+        The key positions (self.app.prefs.keys_pos) are in video coordinate space,
         but with offsets applied. This function returns the actual pixel
         coordinates in the original video frame for sampling.
         """
         # Key positions are stored relative to the video, so add offsets
-        video_x = prefs.xoffset_whitekeys + x
-        video_y = prefs.yoffset_whitekeys + y
+        video_x = self.app.prefs.xoffset_whitekeys + x
+        video_y = self.app.prefs.yoffset_whitekeys + y
 
         # Bounds check against original video dimensions
         if video_x < 0 or video_x >= self.default_width or \
@@ -258,12 +260,12 @@ class MainWindow:
         Returns:
             (screen_x, screen_y) or None if out of bounds
         """
-        if key_index >= len(prefs.keys_pos):
+        if key_index >= len(self.app.prefs.keys_pos):
             return None
             
         # Get key position in video space (with offsets)
-        video_x = prefs.xoffset_whitekeys + prefs.keys_pos[key_index][0]
-        video_y = prefs.yoffset_whitekeys + prefs.keys_pos[key_index][1]
+        video_x = self.app.prefs.xoffset_whitekeys + self.app.prefs.keys_pos[key_index][0]
+        video_y = self.app.prefs.yoffset_whitekeys + self.app.prefs.keys_pos[key_index][1]
         
         # Transform to screen space
         screen_x, screen_y = self.video_to_screen_coords(video_x, video_y)
@@ -281,9 +283,9 @@ class MainWindow:
 
         detected_keys = []
 
-        for i in range(len(prefs.keys_pos)):
+        for i in range(len(self.app.prefs.keys_pos)):
             # Get pixel position in original video for sampling
-            pix_pos = self.getkeyp_pixel_pos(prefs.keys_pos[i][0], prefs.keys_pos[i][1])
+            pix_pos = self.getkeyp_pixel_pos(self.app.prefs.keys_pos[i][0], self.app.prefs.keys_pos[i][1])
             if pix_pos is None:
                 continue
 
@@ -294,12 +296,12 @@ class MainWindow:
 
             # Spark-level sampling (for fade detection)
             sparkkey = [0, 0, 0]
-            if prefs.use_sparks:
+            if self.app.prefs.use_sparks:
                 sh = max(1, int(self.sparksWindow.sparks_slider_height.value))
                 for spark_y_add_pos in range(sh):
                     sparkpixpos = self.getkeyp_pixel_pos(
-                        prefs.keys_pos[i][0],
-                        prefs.keyp_spark_y_pos - spark_y_add_pos
+                        self.app.prefs.keys_pos[i][0],
+                        self.app.prefs.keyp_spark_y_pos - spark_y_add_pos
                     )
                     if sparkpixpos is not None:
                         spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
@@ -318,23 +320,23 @@ class MainWindow:
             pressedcolor = [0, 0, 0]
 
             # === COLOR MATCHING LOGIC ===
-            if prefs.use_alternate_keys:
+            if self.app.prefs.use_alternate_keys:
                 # Alternate mode: detect by color CHANGE from baseline
-                delta = prefs.keyp_delta + prefs.keyp_colors_alternate_sensitivity[i]
-                if (abs(key[0] - prefs.keyp_colors_alternate[i][0]) > delta and
-                    abs(key[1] - prefs.keyp_colors_alternate[i][1]) > delta and
-                    abs(key[2] - prefs.keyp_colors_alternate[i][2]) > delta):
+                delta = self.app.prefs.keyp_delta + self.app.prefs.keyp_colors_alternate_sensitivity[i]
+                if (abs(key[0] - self.app.prefs.keyp_colors_alternate[i][0]) > delta and
+                    abs(key[1] - self.app.prefs.keyp_colors_alternate[i][1]) > delta and
+                    abs(key[2] - self.app.prefs.keyp_colors_alternate[i][2]) > delta):
                     keypressed = 1
-                    pressedcolor = prefs.keyp_colors_alternate[i]
+                    pressedcolor = self.app.prefs.keyp_colors_alternate[i]
             else:
                 # Normal mode: match against defined colors
-                for key_id in range(len(prefs.keyp_colors)):
-                    keyc = prefs.keyp_colors[key_id]
-                    delta = prefs.keyp_delta
+                for key_id in range(len(self.app.prefs.keyp_colors)):
+                    keyc = self.app.prefs.keyp_colors[key_id]
+                    delta = self.app.prefs.keyp_delta
 
                     # Per-color sensitivity override
-                    if prefs.use_percolor_delta and key_id < len(prefs.percolor_delta):
-                        delta = prefs.percolor_delta[key_id]
+                    if self.app.prefs.use_percolor_delta and key_id < len(self.app.prefs.percolor_delta):
+                        delta = self.app.prefs.percolor_delta[key_id]
 
                     # Skip undefined colors
                     if keyc == [0, 0, 0]:
@@ -350,8 +352,8 @@ class MainWindow:
                         self.app.midiHandler.notes_pressed_color[i] = keyc
 
                         # Spark fade detection (keypressed=2 means sustain/fade)
-                        if prefs.use_sparks:
-                            spark_delta = prefs.keyp_colors_sparks_sensitivity[key_id]
+                        if self.app.prefs.use_sparks:
+                            spark_delta = self.app.prefs.keyp_colors_sparks_sensitivity[key_id]
                             has_spark_delta = (
                                 (sparkkey[0] - keyc[0]) > spark_delta or
                                 (sparkkey[1] - keyc[1]) > spark_delta or
@@ -368,17 +370,17 @@ class MainWindow:
         Rollcheck: prevents adjacent keys from triggering simultaneously.
         Modifies the detected_keys list in place based on priority rules.
         """
-        if not prefs.rollcheck:
+        if not self.app.prefs.rollcheck:
             return
 
         # Convert to dict for easier manipulation
         notes_tmp = {i: state for i, state, _ in detected_keys}
 
-        for i in range(1, len(prefs.keys_pos) - 1):
+        for i in range(1, len(self.app.prefs.keys_pos) - 1):
             if i not in notes_tmp:
                 continue
 
-            if prefs.rollcheck_priority == 0:
+            if self.app.prefs.rollcheck_priority == 0:
                 # Black keys have priority
                 if not self.app.midiHandler.is_black_key(i):
                     if notes_tmp.get(i + 1, 0) > 0:
@@ -415,7 +417,7 @@ class MainWindow:
         # Convert detected_keys to dict for easier lookup
         key_states = {i: (state, color) for i, state, color in detected_keys}
 
-        for i in range(len(prefs.keys_pos)):
+        for i in range(len(self.app.prefs.keys_pos)):
             keypressed, pressedcolor = key_states.get(i, (0, [0, 0, 0]))
 
             # Get screen position for this key
@@ -474,7 +476,7 @@ class MainWindow:
                 DrawRect(-7, -12, 7, 12, 2)
 
             # Base octave marker (red)
-            if prefs.octave * 12 == i:
+            if self.app.prefs.octave * 12 == i:
                 glColor4f(1, 0, 0, 1)
                 DrawRect(-9, 9, 9, 12, 3)
 
@@ -484,10 +486,10 @@ class MainWindow:
             glPopMatrix()
 
             # === DRAW SPARK INDICATORS ===
-            if prefs.use_sparks:
+            if self.app.prefs.use_sparks:
                 # Get spark screen position
-                spark_video_x = prefs.xoffset_whitekeys + prefs.keys_pos[i][0]
-                spark_video_y = prefs.keyp_spark_y_pos
+                spark_video_x = self.app.prefs.xoffset_whitekeys + self.app.prefs.keys_pos[i][0]
+                spark_video_y = self.app.prefs.keyp_spark_y_pos
                 spark_screen_x, spark_screen_y = self.video_to_screen_coords(
                     spark_video_x, spark_video_y
                 )
@@ -639,29 +641,29 @@ class MainWindow:
 
     def update_selected_color_delta(self, sender, index):
         self.sparksWindow.selected_color_delta.color = sender.color
-        if index < len(prefs.percolor_delta):
-            self.sparksWindow.selected_color_delta.setvalue(prefs.percolor_delta[index])
+        if index < len(self.app.prefs.percolor_delta):
+            self.sparksWindow.selected_color_delta.setvalue(self.app.prefs.percolor_delta[index])
             self.sparksWindow.sparks_slider_delta.id = Gl.keyp_colormap_id
-            self.sparksWindow.sparks_slider_delta.color = prefs.keyp_colors[Gl.keyp_colormap_id]
+            self.sparksWindow.sparks_slider_delta.color = self.app.prefs.keyp_colors[Gl.keyp_colormap_id]
             self.sparksWindow.sparks_slider_delta.setvalue(
-                prefs.keyp_colors_sparks_sensitivity[Gl.keyp_colormap_id]
+                self.app.prefs.keyp_colors_sparks_sensitivity[Gl.keyp_colormap_id]
             )
 
     def update_color_channels(self, sender):
         i = abs(sender.index) - 1
         if sender.index > 0:
-            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] + 1
+            self.app.prefs.keyp_colors_channel[i] = self.app.prefs.keyp_colors_channel[i] + 1
         else:
-            prefs.keyp_colors_channel[i] = prefs.keyp_colors_channel[i] - 1
+            self.app.prefs.keyp_colors_channel[i] = self.app.prefs.keyp_colors_channel[i] - 1
         
-        prefs.keyp_colors_channel[i] = max(0, min(15, prefs.keyp_colors_channel[i]))
+        self.app.prefs.keyp_colors_channel[i] = max(0, min(15, self.app.prefs.keyp_colors_channel[i]))
         self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(
-            prefs.keyp_colors_channel[i] + 1
+            self.app.prefs.keyp_colors_channel[i] + 1
         )
 
     def update_alternate_label(self):
         self.extraWindow.extra_label1.text = "Use alternate:" + str(
-            prefs.use_alternate_keys
+            self.app.prefs.use_alternate_keys
         )
 
     def update_alternate_sensitivity(self, new_value):
@@ -672,25 +674,25 @@ class MainWindow:
         if len(self.colorWindow.colorBtns_channel_labels) > 0:
             for i in range(len(self.colorWindow.colorBtns)):
                 self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(
-                    prefs.keyp_colors_channel[i] + 1
+                    self.app.prefs.keyp_colors_channel[i] + 1
                 )
 
-        self.settingsWindow.key_sensitivity_slider.set_and_callback(prefs.keyp_delta)
+        self.settingsWindow.key_sensitivity_slider.set_and_callback(self.app.prefs.keyp_delta)
         self.settingsWindow.minimal_duration_slider.set_and_callback(
-            prefs.minimal_duration * 100
+            self.app.prefs.minimal_duration * 100
         )
-        self.settingsWindow.tempo_slider.set_and_callback(prefs.tempo)
-        self.settingsWindow.key_count_slider.set_and_callback(prefs.keys_pos_cnt)
-        self.settingsWindow.rollcheck_button.switch_status = prefs.rollcheck
+        self.settingsWindow.tempo_slider.set_and_callback(self.app.prefs.tempo)
+        self.settingsWindow.key_count_slider.set_and_callback(self.app.prefs.keys_pos_cnt)
+        self.settingsWindow.rollcheck_button.switch_status = self.app.prefs.rollcheck
         self.settingsWindow.rollcheck_priority_button.switch_status = (
-            prefs.rollcheck_priority
+            self.app.prefs.rollcheck_priority
         )
-        self.settingsWindow.notes_overlap_btn.switch_status = prefs.notes_overlap
+        self.settingsWindow.notes_overlap_btn.switch_status = self.app.prefs.notes_overlap
         self.settingsWindow.ignore_notes_with_minimal_duration_btn.switch_status = (
-            prefs.ignore_minimal_duration
+            self.app.prefs.ignore_minimal_duration
         )
 
-        self.sparksWindow.use_percolor_delta.switch_status = prefs.use_percolor_delta
-        self.sparksWindow.sparks_switch.switch_status = prefs.use_sparks
+        self.sparksWindow.use_percolor_delta.switch_status = self.app.prefs.use_percolor_delta
+        self.sparksWindow.sparks_switch.switch_status = self.app.prefs.use_sparks
         self.sparksWindow.sparks_slider_delta.value = 0
         self.sparksWindow.sparks_slider_delta.id = -1
