@@ -613,6 +613,27 @@ class MainWindow:
         for wnd in self.glwindows:
             wnd.update_mouse_move(mouse_x, mouse_y)
 
+    def color_picker(self, mouse_x, mouse_y):
+        if Gl.keyp_colormap_id != -1:
+             # Convert screen coordinates to video coordinates for color picking
+            video_x, video_y = self.screen_to_video_coords(mouse_x, mouse_y)
+                    
+            # Bounds check
+            if 0 <= video_x < self.default_width and 0 <= video_y < self.default_height:
+                pix_x = int(video_x)
+                pix_y = int(video_y)
+                
+                key_BGR = self.currentImage[pix_y, pix_x]
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][0] = key_BGR[2]
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][1] = key_BGR[1]
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][2] = key_BGR[0]
+
+    def reset_color_picker(self):
+            if Gl.keyp_colormap_id != -1:
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][0] = 0
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][1] = 0
+                self.app.prefs.keyp_colors[Gl.keyp_colormap_id][2] = 0
+    
     def get_colorBtn_list(self):
         return self.colorWindow.colorBtns
 
@@ -657,6 +678,7 @@ class MainWindow:
             self.app.prefs.keyp_colors_channel[i] = self.app.prefs.keyp_colors_channel[i] - 1
         
         self.app.prefs.keyp_colors_channel[i] = max(0, min(15, self.app.prefs.keyp_colors_channel[i]))
+        
         self.colorWindow.colorBtns_channel_labels[i].text = "Ch:" + str(
             self.app.prefs.keyp_colors_channel[i] + 1
         )

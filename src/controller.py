@@ -81,10 +81,10 @@ class AppController:
             elif event.type == pygame.MOUSEBUTTONUP:
                 self.appView.mouse_up_event(mouse_x, mouse_y, event.button)
 
-                if event.button == 1:
+                if event.button == pygame.BUTTON_LEFT:
                     self.keygrab = 0
                     self.keygrabid = -1
-                if event.button == 3:
+                if event.button == pygame.BUTTON_RIGHT:
                     self.keygrab = 0
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -222,10 +222,9 @@ class AppController:
             self.scroll_to_end(None)
 
         if key == pygame.K_0:
-            if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
-                prefs.keyp_colors[Gl.keyp_colormap_id][0] = 0
-                prefs.keyp_colors[Gl.keyp_colormap_id][1] = 0
-                prefs.keyp_colors[Gl.keyp_colormap_id][2] = 0
+            if mods & pygame.KMOD_CTRL:
+                self.appView.reset_color_picker()
+
 
         # if key == pygame.K_PAGEUP:
         #     if mods & pygame.KMOD_SHIFT:
@@ -283,34 +282,23 @@ class AppController:
 
         self.appView.mouse_down_event(mouse_x, mouse_y, button)
         
-        if button == 4:
+        if button == pygame.BUTTON_WHEELUP:
             prefs.whitekey_width += 0.05
             self.midiHandler.update_key_positions()
             
-        if button == 5:
+        if button == pygame.BUTTON_WHEELDOWN:
             prefs.whitekey_width -= 0.05
             self.midiHandler.update_key_positions()
             
-        if button == 1:
-            if mods & pygame.KMOD_CTRL and Gl.keyp_colormap_id != -1:
-                # Convert screen coordinates to video coordinates for color picking
-                video_x, video_y = self.appView.screen_to_video_coords(mouse_x, mouse_y)
+        if button == pygame.BUTTON_LEFT:
+            if mods & pygame.KMOD_CTRL:
+                self.lastkeygrabid = -1 # reset key grab id
+                self.appView.color_picker(mouse_x, mouse_y)
+                               
                 
-                # Bounds check
-                if 0 <= video_x < self.video.video_width and 0 <= video_y < self.video.video_height:
-                    pix_x = int(video_x)
-                    pix_y = int(video_y)
-                    
-                    key_BGR = self.video.image[pix_y, pix_x]
-                    prefs.keyp_colors[Gl.keyp_colormap_id][0] = key_BGR[2]
-                    prefs.keyp_colors[Gl.keyp_colormap_id][1] = key_BGR[1]
-                    prefs.keyp_colors[Gl.keyp_colormap_id][2] = key_BGR[0]
             
             # Key grabbing logic - now uses screen positions for hit testing
             size = 5
-            if mods & pygame.KMOD_CTRL:
-                self.lastkeygrabid = -1
-                
             for i in range(len(prefs.keys_pos)):
                 # Get screen position of this key for hit testing
                 screen_pos = self.appView.get_key_screen_position(i)
@@ -331,7 +319,7 @@ class AppController:
                     logger.debug(f"Grabbed key: {i}")
                     break
                     
-        if button == 3:
+        if button == pygame.BUTTON_RIGHT:
             self.keygrab = 2
             size = 5
             logger.debug(
@@ -541,7 +529,7 @@ class AppController:
 
     def update_channels(self, sender):
         logger.debug("update_channels..." + str(sender.index))
-        self.appView.update_color_channels(self, sender)
+        self.appView.update_color_channels(sender)
         
 
     def disable_color(self, sender):
