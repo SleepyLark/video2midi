@@ -42,8 +42,8 @@ def savesettings(settingsfile: str) -> None:
 	config.set(section, 'color_channel_accordance',skeyp_colors_channel[0:-1])
 	config.set(section, 'channel_prog_accordance', skeyp_colors_channel_prog[0:-1])
 
-	config.set(section, 'xoffset_whitekeys',str(int(prefs.xoffset_whitekeys)))
-	config.set(section, 'yoffset_whitekeys',str(int(prefs.yoffset_whitekeys)))
+	config.set(section, 'xoffset_whitekeys',str(int(prefs.x_offset_whitekeys)))
+	config.set(section, 'yoffset_whitekeys',str(int(prefs.y_offset_whitekeys)))
 	config.set(section, 'yoffset_blackkeys',str(int(prefs.yoffset_blackkeys)))
 	config.set(section, 'whitekey_width',str(int(prefs.white_key_width)))
 
@@ -163,9 +163,9 @@ def loadsettings(cfgfile: str) -> None:
 		print('read color channel = prog ', prefs.keyp_colors_channel_prog)
 
 	if config.has_option(section, 'xoffset_whitekeys'):
-		prefs.xoffset_whitekeys = config.getint(section, 'xoffset_whitekeys')
+		prefs.x_offset_whitekeys = config.getint(section, 'xoffset_whitekeys')
 	if config.has_option(section, 'yoffset_whitekeys'):
-		prefs.yoffset_whitekeys = config.getint(section, 'yoffset_whitekeys')
+		prefs.y_offset_whitekeys = config.getint(section, 'yoffset_whitekeys')
 	if config.has_option(section, 'yoffset_blackkeys'):
 		prefs.yoffset_blackkeys = config.getint(section, 'yoffset_blackkeys')
 	if config.has_option(section, 'whitekey_width'):

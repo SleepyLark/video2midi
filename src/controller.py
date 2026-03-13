@@ -65,7 +65,7 @@ class AppController:
 
         while self.running:
             self.handle_events()
-            self.app_view.drawframe()
+            self.app_view.draw_frame()
 
     # === INPUT HANDLE ===
     def handle_events(self):
@@ -102,15 +102,15 @@ class AppController:
                 video_x, video_y = self.app_view.screen_to_video_coords(mouse_x, mouse_y)
                 
                 # Update key position in video space
-                prefs.keys_pos[self.key_grab_id][0] = int(video_x - prefs.xoffset_whitekeys)
-                prefs.keys_pos[self.key_grab_id][1] = int(video_y - prefs.yoffset_whitekeys)
+                prefs.keys_pos[self.key_grab_id][0] = int(video_x - prefs.x_offset_whitekeys)
+                prefs.keys_pos[self.key_grab_id][1] = int(video_y - prefs.y_offset_whitekeys)
                 
             if self.key_grab == DragMode.DRAG_ALL:
                 # Convert screen mouse position to video space for offset dragging
                 video_x, video_y = self.app_view.screen_to_video_coords(mouse_x, mouse_y)
                 
-                prefs.xoffset_whitekeys = int(video_x - self.key_grab_add_x)
-                prefs.yoffset_whitekeys = int(video_y)
+                prefs.x_offset_whitekeys = int(video_x - self.key_grab_add_x)
+                prefs.y_offset_whitekeys = int(video_y)
 
             self.app_view.mouse_move(mouse_x, mouse_y)
 
@@ -361,7 +361,7 @@ class AppController:
         logger.info(f"Processing time: {t2 - t1:.2f} seconds")
         
         # Reset to start frame
-        self.app_view.loadImage(self.video.get_image(prefs.start_frame))
+        self.app_view.load_image(self.video.get_image(prefs.start_frame))
         
         return status
 
@@ -369,7 +369,7 @@ class AppController:
         settings.loadsettings(config_file)
         settings.compatibleColors(self.app_view.get_colorBtn_list())
 
-        self.app_view.loadImage(self.video.get_image(prefs.start_frame))
+        self.app_view.load_image(self.video.get_image(prefs.start_frame))
         self.app_view.update_values_from_settings()
         self.app_view.resize_window()
 
@@ -449,7 +449,7 @@ class AppController:
         if currentFrame < 1:
             currentFrame = 1
 
-        self.app_view.loadImage(self.video.get_image(currentFrame))
+        self.app_view.load_image(self.video.get_image(currentFrame))
 
     def scroll_forward_by_frame(self, sender):
         self.scroll_by_steps(1)
@@ -465,11 +465,11 @@ class AppController:
 
     def scroll_to_start(self, sender):
         currentFrame = 0
-        self.app_view.loadImage(self.video.get_image(currentFrame))
+        self.app_view.load_image(self.video.get_image(currentFrame))
 
     def scroll_to_end(self, sender):
         currentFrame = self.video.length - 100
-        self.app_view.loadImage(self.video.get_image(currentFrame))
+        self.app_view.load_image(self.video.get_image(currentFrame))
 
     def rotate_clockwise(self,sender):
         prefs.keys_angle -= 5
@@ -533,8 +533,8 @@ class AppController:
         #   prefs.keyp_colors_channel[i]= prefs.keyp_colors_channel[i] + 1
 
     def read_key_color(self, i):
-        pix_x = int(prefs.xoffset_whitekeys + prefs.keys_pos[i][0])
-        pix_y = int(prefs.yoffset_whitekeys + prefs.keys_pos[i][1])
+        pix_x = int(prefs.x_offset_whitekeys + prefs.keys_pos[i][0])
+        pix_y = int(prefs.y_offset_whitekeys + prefs.keys_pos[i][1])
 
         if (
             (pix_x >= self.app_view.width)

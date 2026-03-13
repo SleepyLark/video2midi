@@ -164,7 +164,7 @@ class MidiHandler:
             if (current_frame % 10 == 0):
                 progress = current_frame / (prefs.end_frame if prefs.end_frame > 0 else 1)
                 logger.info(f"Processing frame: {current_frame} / {prefs.end_frame} ({int(progress * 100)}%)")
-                appView.loadImage(img)
+                appView.load_image(img)
                 appView.draw_processing_progress(current_frame - prefs.start_frame, 
                                         prefs.end_frame - prefs.start_frame)
         

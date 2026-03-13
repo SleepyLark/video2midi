@@ -35,7 +35,7 @@ class MainWindow:
         # default is set to video's original resolution
         self.default_width = frame_w
         self.default_height = frame_h
-        self.currentImage = None
+        self.current_image = None
         self.renderedFrame = None
         self.screen = None
 
@@ -58,8 +58,9 @@ class MainWindow:
         
         # Initialize GL objects
         doinitGl()
+
         self.reshape(self.width, self.height)
-        self.loadImage(first_frame)
+        self.load_image(first_frame)
 
         self.ShowHideButton = GLButton(
             0, 0, 13, 13, 1, [128, 128, 128], "",
@@ -171,9 +172,9 @@ class MainWindow:
 
         self.width, self.height = updated_w, updated_h
 
-    def loadImage(self, image):
+    def load_image(self, image):
         """Upload the video frame to the GPU as a texture."""
-        self.currentImage = image
+        self.current_image = image
         self.tex_w = image.shape[1]
         self.tex_h = image.shape[0]
 
@@ -242,8 +243,8 @@ class MainWindow:
         coordinates in the original video frame for sampling.
         """
         # Key positions are stored relative to the video, so add offsets
-        video_x = self.app.prefs.xoffset_whitekeys + x
-        video_y = self.app.prefs.yoffset_whitekeys + y
+        video_x = self.app.prefs.x_offset_whitekeys + x
+        video_y = self.app.prefs.y_offset_whitekeys + y
 
         # Bounds check against original video dimensions
         if video_x < 0 or video_x >= self.default_width or \
@@ -264,8 +265,8 @@ class MainWindow:
             return None
             
         # Get key position in video space (with offsets)
-        video_x = self.app.prefs.xoffset_whitekeys + self.app.prefs.keys_pos[key_index][0]
-        video_y = self.app.prefs.yoffset_whitekeys + self.app.prefs.keys_pos[key_index][1]
+        video_x = self.app.prefs.x_offset_whitekeys + self.app.prefs.keys_pos[key_index][0]
+        video_y = self.app.prefs.y_offset_whitekeys + self.app.prefs.keys_pos[key_index][1]
         
         # Transform to screen space
         screen_x, screen_y = self.video_to_screen_coords(video_x, video_y)
@@ -274,11 +275,11 @@ class MainWindow:
 
     def detect_key_presses(self):
         """
-        Core detection logic: samples pixels at key positions and determines
+        Samples pixels at key positions and determines
         which keys are pressed based on color matching.
         Returns a list of (key_index, keypressed_state, pressedcolor)
         """
-        if self.currentImage is None:
+        if self.current_image is None:
             return []
 
         detected_keys = []
@@ -290,34 +291,34 @@ class MainWindow:
                 continue
 
             # Sample the pixel color at key position
-            keybgr = self.currentImage[pix_pos[1], pix_pos[0]]
+            key_bgr = self.current_image[pix_pos[1], pix_pos[0]]
             # Convert numpy values to Python ints to avoid overflow warnings
-            key = [int(keybgr[2]), int(keybgr[1]), int(keybgr[0])]  # BGR to RGB
+            key = [int(key_bgr[2]), int(key_bgr[1]), int(key_bgr[0])]  # BGR to RGB
 
             # Spark-level sampling (for fade detection)
-            sparkkey = [0, 0, 0]
+            spark_key = [0, 0, 0]
             if self.app.prefs.use_sparks:
                 sh = max(1, int(self.sparksWindow.sparks_slider_height.value))
                 for spark_y_add_pos in range(sh):
-                    sparkpixpos = self.getkeyp_pixel_pos(
+                    spark_pix_pos = self.getkeyp_pixel_pos(
                         self.app.prefs.keys_pos[i][0],
                         self.app.prefs.keyp_spark_y_pos - spark_y_add_pos
                     )
-                    if sparkpixpos is not None:
-                        spark_bgr = self.currentImage[sparkpixpos[1], sparkpixpos[0]]
+                    if spark_pix_pos is not None:
+                        spark_bgr = self.current_image[spark_pix_pos[1], spark_pix_pos[0]]
             
-                        sparkkey[0] += int(spark_bgr[2])
-                        sparkkey[1] += int(spark_bgr[1])
-                        sparkkey[2] += int(spark_bgr[0])
+                        spark_key[0] += int(spark_bgr[2])
+                        spark_key[1] += int(spark_bgr[1])
+                        spark_key[2] += int(spark_bgr[0])
 
                 # Convert to int after averaging
-                sparkkey = [int(sparkkey[0] / sh), int(sparkkey[1] / sh), int(sparkkey[2] / sh)]
+                spark_key = [int(spark_key[0] / sh), int(spark_key[1] / sh), int(spark_key[2] / sh)]
 
             if i > 144:
                 continue
 
-            keypressed = 0
-            pressedcolor = [0, 0, 0]
+            key_pressed = 0
+            pressed_color = [0, 0, 0]
 
             # === COLOR MATCHING LOGIC ===
             if self.app.prefs.use_alternate_keys:
@@ -326,12 +327,12 @@ class MainWindow:
                 if (abs(key[0] - self.app.prefs.keyp_colors_alternate[i][0]) > delta and
                     abs(key[1] - self.app.prefs.keyp_colors_alternate[i][1]) > delta and
                     abs(key[2] - self.app.prefs.keyp_colors_alternate[i][2]) > delta):
-                    keypressed = 1
-                    pressedcolor = self.app.prefs.keyp_colors_alternate[i]
+                    key_pressed = 1
+                    pressed_color = self.app.prefs.keyp_colors_alternate[i]
             else:
                 # Normal mode: match against defined colors
                 for key_id in range(len(self.app.prefs.keyp_colors)):
-                    keyc = self.app.prefs.keyp_colors[key_id]
+                    key_color = self.app.prefs.keyp_colors[key_id]
                     delta = self.app.prefs.keyp_delta
 
                     # Per-color sensitivity override
@@ -339,32 +340,33 @@ class MainWindow:
                         delta = self.app.prefs.percolor_delta[key_id]
 
                     # Skip undefined colors
-                    if keyc == [0, 0, 0]:
+                    if key_color == [0, 0, 0]:
                         continue
 
                     # Color match found
-                    if (abs(key[0] - keyc[0]) < delta and
-                        abs(key[1] - keyc[1]) < delta and
-                        abs(key[2] - keyc[2]) < delta):
+                    if (abs(key[0] - key_color[0]) < delta and
+                        abs(key[1] - key_color[1]) < delta and
+                        abs(key[2] - key_color[2]) < delta):
 
-                        keypressed = 1
-                        pressedcolor = keyc
-                        self.app.midi_handler.notes_pressed_color[i] = keyc
+                        key_pressed = 1
+                        pressed_color = key_color
+                        self.app.midi_handler.notes_pressed_color[i] = key_color
 
                         # Spark fade detection (keypressed=2 means sustain/fade)
                         if self.app.prefs.use_sparks:
                             spark_delta = self.app.prefs.keyp_colors_sparks_sensitivity[key_id]
                             has_spark_delta = (
-                                (sparkkey[0] - keyc[0]) > spark_delta or
-                                (sparkkey[1] - keyc[1]) > spark_delta or
-                                (sparkkey[2] - keyc[2]) > spark_delta
+                                (spark_key[0] - key_color[0]) > spark_delta or
+                                (spark_key[1] - key_color[1]) > spark_delta or
+                                (spark_key[2] - key_color[2]) > spark_delta
                             )
                             if not has_spark_delta:
-                                keypressed = 2  # Sustain state
+                                key_pressed = 2  # Sustain state
 
-            detected_keys.append((i, keypressed, pressedcolor))
+            detected_keys.append((i, key_pressed, pressed_color))
 
         return detected_keys
+    
     def apply_rollcheck_filter(self, detected_keys):
         """
         Rollcheck: prevents adjacent keys from triggering simultaneously.
@@ -418,7 +420,7 @@ class MainWindow:
         key_states = {i: (state, color) for i, state, color in detected_keys}
 
         for i in range(len(self.app.prefs.keys_pos)):
-            keypressed, pressedcolor = key_states.get(i, (0, [0, 0, 0]))
+            key_pressed, pressed_color = key_states.get(i, (0, [0, 0, 0]))
 
             # Get screen position for this key
             screen_pos = self.get_key_screen_position(i)
@@ -440,19 +442,19 @@ class MainWindow:
             DrawQuad(-0.5, -self.app.line_height, 0.5, self.app.line_height)
 
             # === DRAW KEY STATE ===
-            if keypressed != 0:
+            if key_pressed != 0:
                 # PRESSED: Draw colored box
                 glColor4f(
-                    pressedcolor[0] / 255.0,
-                    pressedcolor[1] / 255.0,
-                    pressedcolor[2] / 255.0,
+                    pressed_color[0] / 255.0,
+                    pressed_color[1] / 255.0,
+                    pressed_color[2] / 255.0,
                     0.9
                 )
                 DrawQuad(-6, -7, 6, 7)
 
                 # Draw outline (different size for normal vs sustain)
                 glColor4f(0, 0, 0, 1)
-                if keypressed == 1:
+                if key_pressed == 1:
                     DrawRect(-7, -9, 7, 9, 3)  # Normal press
                 else:
                     DrawRect(-5, -7, 5, 7, 3)  # Sustain/fade
@@ -488,7 +490,7 @@ class MainWindow:
             # === DRAW SPARK INDICATORS ===
             if self.app.prefs.use_sparks:
                 # Get spark screen position
-                spark_video_x = self.app.prefs.xoffset_whitekeys + self.app.prefs.keys_pos[i][0]
+                spark_video_x = self.app.prefs.x_offset_whitekeys + self.app.prefs.keys_pos[i][0]
                 spark_video_y = self.app.prefs.keyp_spark_y_pos
                 spark_screen_x, spark_screen_y = self.video_to_screen_coords(
                     spark_video_x, spark_video_y
@@ -527,8 +529,8 @@ class MainWindow:
         self.apply_rollcheck_filter(detected_keys)
         
         # Update MIDI handler with current states
-        for i, keypressed, _ in detected_keys:
-            self.app.midi_handler.notes_tmp[i] = keypressed
+        for i, key_pressed, _ in detected_keys:
+            self.app.midi_handler.notes_tmp[i] = key_pressed
         
         # Draw visual overlays
         self.draw_key_overlays(detected_keys)
@@ -549,9 +551,9 @@ class MainWindow:
         # 6. Push to screen
         pygame.display.flip()
 
-    def drawframe(self):
+    def draw_frame(self):
         """Main rendering function - draws everything each frame."""
-        if self.currentImage is None:
+        if self.current_image is None:
             return
 
         # === SETUP ===
@@ -573,8 +575,8 @@ class MainWindow:
         self.apply_rollcheck_filter(detected_keys)
         
         # Update MIDI handler with current states
-        for i, keypressed, _ in detected_keys:
-            self.app.midi_handler.notes_tmp[i] = keypressed
+        for i, key_pressed, _ in detected_keys:
+            self.app.midi_handler.notes_tmp[i] = key_pressed
         
         # Draw visual overlays
         self.draw_key_overlays(detected_keys)
@@ -610,8 +612,8 @@ class MainWindow:
             self.glwindows.sort(key=lambda x: x.active, reverse=False)
 
     def mouse_move(self, mouse_x, mouse_y):
-        for wnd in self.glwindows:
-            wnd.update_mouse_move(mouse_x, mouse_y)
+        for window in self.glwindows:
+            window.update_mouse_move(mouse_x, mouse_y)
 
     def color_picker(self, mouse_x, mouse_y):
         if Gl.keyp_colormap_id != -1:
@@ -623,7 +625,7 @@ class MainWindow:
                 pix_x = int(video_x)
                 pix_y = int(video_y)
                 
-                key_BGR = self.currentImage[pix_y, pix_x]
+                key_BGR = self.current_image[pix_y, pix_x]
                 self.app.prefs.keyp_colors[Gl.keyp_colormap_id][0] = key_BGR[2]
                 self.app.prefs.keyp_colors[Gl.keyp_colormap_id][1] = key_BGR[1]
                 self.app.prefs.keyp_colors[Gl.keyp_colormap_id][2] = key_BGR[0]
@@ -641,9 +643,9 @@ class MainWindow:
 
     def draw_toggle_windows(self, sender=None):
         logger.debug("Hide all windows")
-        for i in self.glwindows:
-            if isinstance(i, GLWindow):
-                i.fullhidden = self.ShowHideButton.switch_status
+        for window in self.glwindows:
+            if isinstance(window, GLWindow):
+                window.fullhidden = self.ShowHideButton.switch_status
 
     def toggle_window_button(self):
         self.ShowHideButton.switch_status = not self.ShowHideButton.switch_status
