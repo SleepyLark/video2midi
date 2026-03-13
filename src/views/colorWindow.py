@@ -22,7 +22,7 @@ class ColorWindow(GLWindow):
             cx,cy = (i % 2) * 130,  ( i // 2 ) * 20
             offsetx,offsety=4,4
 
-            self.colorBtns.append( GLColorButton(offsetx+cx,offsety+cy ,20,20,i, self.app.prefs.keyp_colors[i], self.app.onPallete_click ) )
+            self.colorBtns.append( GLColorButton(offsetx+cx,offsety+cy ,20,20,i, self.app.prefs.keyp_colors[i], self.app.on_pallete_click ) )
             self.root.appendChild(self.colorBtns[i])
             color_channel_label = GLLabel(offsetx+25+cx,offsety+cy , "Ch:" + str(self.app.prefs.keyp_colors_channel[i]+1) )
 

@@ -349,7 +349,7 @@ class MainWindow:
 
                         keypressed = 1
                         pressedcolor = keyc
-                        self.app.midiHandler.notes_pressed_color[i] = keyc
+                        self.app.midi_handler.notes_pressed_color[i] = keyc
 
                         # Spark fade detection (keypressed=2 means sustain/fade)
                         if self.app.prefs.use_sparks:
@@ -382,14 +382,14 @@ class MainWindow:
 
             if self.app.prefs.rollcheck_priority == 0:
                 # Black keys have priority
-                if not self.app.midiHandler.is_black_key(i):
+                if not self.app.midi_handler.is_black_key(i):
                     if notes_tmp.get(i + 1, 0) > 0:
                         notes_tmp[i] = 0
                     if notes_tmp.get(i - 1, 0) > 0:
                         notes_tmp[i] = 0
             else:
                 # White keys have priority
-                if self.app.midiHandler.is_black_key(i):
+                if self.app.midi_handler.is_black_key(i):
                     if notes_tmp.get(i + 1, 0) > 0:
                         notes_tmp[i] = 0
                     if notes_tmp.get(i - 1, 0) > 0:
@@ -435,7 +435,7 @@ class MainWindow:
 
             # === DRAW VERTICAL GUIDE LINE ===
             glColor4f(1, 1, 1, 0.5)
-            if not self.app.midiHandler.is_black_key(i):
+            if not self.app.midi_handler.is_black_key(i):
                 glColor4f(0.57, 0.57, 0.57, 0.55)
             DrawQuad(-0.5, -self.app.line_height, 0.5, self.app.line_height)
 
@@ -466,7 +466,7 @@ class MainWindow:
             # === SPECIAL HIGHLIGHTS ===
             
             # Selected key highlight (blue)
-            if self.app.lastkeygrabid == i:
+            if self.app.last_key_grab_id == i:
                 glColor4f(0.0, 0.5, 1.0, 0.7)
                 DrawQuad(-4, -4, 4, 4)
 
@@ -528,7 +528,7 @@ class MainWindow:
         
         # Update MIDI handler with current states
         for i, keypressed, _ in detected_keys:
-            self.app.midiHandler.notes_tmp[i] = keypressed
+            self.app.midi_handler.notes_tmp[i] = keypressed
         
         # Draw visual overlays
         self.draw_key_overlays(detected_keys)
@@ -574,7 +574,7 @@ class MainWindow:
         
         # Update MIDI handler with current states
         for i, keypressed, _ in detected_keys:
-            self.app.midiHandler.notes_tmp[i] = keypressed
+            self.app.midi_handler.notes_tmp[i] = keypressed
         
         # Draw visual overlays
         self.draw_key_overlays(detected_keys)

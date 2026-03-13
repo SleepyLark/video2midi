@@ -4,11 +4,16 @@ Handles MIDI file creation, note extraction, and saving.
 """
 
 # MIDI processing logic for video2midi
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import os
 import ntpath
 import math
 from src.prefs import prefs
 from src.models.midi import midinotes
+
+if TYPE_CHECKING:
+    from ..controller import AppController
 
 import logging
 logger = logging.getLogger(__name__)
@@ -70,19 +75,19 @@ class MidiHandler:
             
             if self.is_black_key(semitone_index):
                 prefs.keys_pos[octave_index * 12 + semitone_index][1] = prefs.yoffset_blackkeys
-                current_x += -prefs.whitekey_width
+                current_x += -prefs.white_key_width
             if (semitone_index == 1) or (semitone_index == 6):
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * prefs.blackkey_relative_position))
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.white_key_width * prefs.black_key_relative_position))
             if (semitone_index == 8):
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * 0.5))
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.white_key_width * 0.5))
             if (semitone_index == 3) or (semitone_index == 10):
-                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.whitekey_width * (1.0 - prefs.blackkey_relative_position)))
-            current_x += prefs.whitekey_width
+                prefs.keys_pos[octave_index * 12 + semitone_index][0] = int(round(current_x + prefs.white_key_width * (1.0 - prefs.black_key_relative_position)))
+            current_x += prefs.white_key_width
         for octave_index in range(len(prefs.keys_pos)):
             prefs.keys_pos[octave_index] = self.v_rotate(prefs.keys_pos[octave_index], prefs.keys_angle)
             prefs.keys_pos[octave_index][0] = -prefs.keys_pos[octave_index][0]
 
-    def process_midi(self, app_controller):
+    def process_midi(self, app: AppController):
         """Process the video frame by frame and generate MIDI file."""
         import pygame
         import numpy as np
@@ -90,8 +95,8 @@ class MidiHandler:
         logger.info("Starting MIDI reconstruction...")
 
         # Get references from controller
-        video = app_controller.video
-        appView = app_controller.appView
+        video = app.video
+        appView = app.app_view
 
         # Setup MIDI file
         self.basenote = prefs.octave * 12
@@ -99,15 +104,15 @@ class MidiHandler:
         track = 0
         time = 0
 
-        midiOutFile.setup_track(time, prefs.miditrackname, prefs.tempo)
+        midiOutFile.setup_track(time, prefs.midi_track_name, prefs.tempo)
         first_note_time = 0
 
         # Initialize program changes
         for i in range(len(prefs.keyp_colors_channel)):
             midiOutFile.addProgramChange(track, prefs.keyp_colors_channel[i], prefs.keyp_colors_channel_prog[i])
 
-        logger.info(f"Starting from frame: {prefs.startframe}")
-        img = video.get_image(prefs.startframe)
+        logger.info(f"Starting from frame: {prefs.start_frame}")
+        img = video.get_image(prefs.start_frame)
         notecnt = 0
 
         # Reset note states
@@ -118,7 +123,7 @@ class MidiHandler:
             self.notes_channel[i] = 0
             self.notes_tmp[i] = 0
 
-        current_frame = prefs.startframe
+        current_frame = prefs.start_frame
         success = True
         
         # 1. Pre-calc Main Key Positions
@@ -153,15 +158,15 @@ class MidiHandler:
         num_keys = len(prefs.keys_pos)
 
         # detection loop
-        while success and current_frame <= prefs.endframe:
+        while success and current_frame <= prefs.end_frame:
             # TODO: REMOVE REFERENCES TO APPVIEW
             # Update display every 10 frames
             if (current_frame % 10 == 0):
-                progress = current_frame / (prefs.endframe if prefs.endframe > 0 else 1)
-                logger.info(f"Processing frame: {current_frame} / {prefs.endframe} ({int(progress * 100)}%)")
+                progress = current_frame / (prefs.end_frame if prefs.end_frame > 0 else 1)
+                logger.info(f"Processing frame: {current_frame} / {prefs.end_frame} ({int(progress * 100)}%)")
                 appView.loadImage(img)
-                appView.draw_processing_progress(current_frame - prefs.startframe, 
-                                        prefs.endframe - prefs.startframe)
+                appView.draw_processing_progress(current_frame - prefs.start_frame, 
+                                        prefs.end_frame - prefs.start_frame)
         
                 pygame.event.pump()
                 
@@ -283,8 +288,8 @@ class MidiHandler:
                             first_note_time = current_frame / video.fps
                         self.notes_channel[note] = note_channel
                         
-                        if app_controller.separate_note_id != -1:
-                            if app_controller.separate_note_id < note:
+                        if app.separate_note_id != -1:
+                            if app.separate_note_id < note:
                                 self.notes_channel[note] = 0
                             else:
                                 self.notes_channel[note] = 1
@@ -328,10 +333,10 @@ class MidiHandler:
                         time_val = self.notes_db[note] / video.fps
                         duration = (current_frame - self.notes_db[note]) / video.fps
                         
-                        if app_controller.use_snap_notes_to_grid:
+                        if app.use_snap_notes_to_grid:
                             time_val = self.snap_to_grid(time_val - first_note_time, 
-                                                app_controller.notes_grid_size) + 1
-                            duration = self.snap_to_grid(duration, app_controller.notes_grid_size)
+                                                app.notes_grid_size) + 1
+                            duration = self.snap_to_grid(duration, app.notes_grid_size)
                         
                         ignore = False
                         if duration < prefs.minimal_duration:
@@ -357,12 +362,12 @@ class MidiHandler:
                         time_val = self.notes_db[note] / video.fps
                         duration = (self.notes_de[note] - self.notes_db[note]) / video.fps
                         
-                        if app_controller.use_snap_notes_to_grid:
+                        if app.use_snap_notes_to_grid:
                             if first_note_time == 0:
                                 first_note_time = time_val
                             time_val = self.snap_to_grid(time_val - first_note_time,
-                                                app_controller.notes_grid_size) + 1
-                            duration = self.snap_to_grid(duration, app_controller.notes_grid_size)
+                                                app.notes_grid_size) + 1
+                            duration = self.snap_to_grid(duration, app.notes_grid_size)
                         
                         ignore = False
                         if duration < prefs.minimal_duration:
@@ -385,16 +390,16 @@ class MidiHandler:
             
             # Next frame
             current_frame += 1
-            if current_frame <= prefs.endframe:
+            if current_frame <= prefs.end_frame:
                 video.read_next_frame()
         
         logger.info(f"Saved {notecnt} notes")
         
         # Generate output filename
-        outputmid = ntpath.basename(app_controller.filepath) + "_output.mid"
+        outputmid = ntpath.basename(app.file_path) + "_output.mid"
         fileid = 0
         while os.path.exists(outputmid):
-            outputmid = ntpath.basename(app_controller.filepath) + f"_{fileid}_output.mid"
+            outputmid = ntpath.basename(app.file_path) + f"_{fileid}_output.mid"
             fileid += 1
             if fileid > 999:
                 break

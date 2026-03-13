@@ -21,8 +21,8 @@ to deselect the key press ctrl + left mouse button on empty space.""" )
         self.addSliders()
 
     def addButtons(self): 
-        self.root.appendChild( GLButton(5,  20 ,128,25,1, [128,128,128], "read colors" ,self.app.readcolors) )
-        self.root.appendChild( GLButton(135,20 ,128,25,1, [128,128,128], "update color" ,self.app.updatecolor) )
+        self.root.appendChild( GLButton(5,  20 ,128,25,1, [128,128,128], "read colors" ,self.app.read_colors) )
+        self.root.appendChild( GLButton(135,20 ,128,25,1, [128,128,128], "update color" ,self.app.update_color) )
         self.root.appendChild( GLButton(265,20 ,138,25,1, [128,128,128], "enable/disable" ,self.app.change_use_alternate_keys) )
         self.root.appendChild( GLButton(265,45 ,155,22,1, [96 ,96 ,128], "snap notes to grid" ,self.app.snap_notes_to_the_grid,switch=1, switch_status=self.app.use_snap_notes_to_grid) )
 

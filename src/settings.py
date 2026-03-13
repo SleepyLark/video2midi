@@ -10,7 +10,7 @@ def savesettings(settingsfile: str) -> None:
 	config = ConfigParser()
 	section='options'
 	config.add_section(section)
-	config.set(section, 'midi_track_name', prefs.miditrackname)
+	config.set(section, 'midi_track_name', prefs.midi_track_name)
 	config.set(section, 'debug', str(int(prefs.debug)))
 	config.set(section, 'notes_overlap', str(int(prefs.notes_overlap)))
 	config.set(section, 'resize', str(int(prefs.resize)))
@@ -21,9 +21,9 @@ def savesettings(settingsfile: str) -> None:
 	config.set(section, 'sensitivity', str(int(prefs.keyp_delta)))
 	config.set(section, 'octave', str(int(prefs.octave)))
 	config.set(section, 'output_midi_tempo', str(int(prefs.tempo)))
-	config.set(section, 'frame_start', str(int(prefs.startframe)))
-	config.set(section, 'frame_end', str(int(prefs.endframe)))
-	config.set(section, 'blackkey_relative_position', str(float(prefs.blackkey_relative_position)))
+	config.set(section, 'frame_start', str(int(prefs.start_frame)))
+	config.set(section, 'frame_end', str(int(prefs.end_frame)))
+	config.set(section, 'blackkey_relative_position', str(float(prefs.black_key_relative_position)))
 	config.set(section, 'keys_pos_count', str(prefs.keys_pos_cnt))
 	# Sparks
 	config.set(section, 'keyp_spark_y_pos', str(int(prefs.keyp_spark_y_pos)))
@@ -45,7 +45,7 @@ def savesettings(settingsfile: str) -> None:
 	config.set(section, 'xoffset_whitekeys',str(int(prefs.xoffset_whitekeys)))
 	config.set(section, 'yoffset_whitekeys',str(int(prefs.yoffset_whitekeys)))
 	config.set(section, 'yoffset_blackkeys',str(int(prefs.yoffset_blackkeys)))
-	config.set(section, 'whitekey_width',str(int(prefs.whitekey_width)))
+	config.set(section, 'whitekey_width',str(int(prefs.white_key_width)))
 
 	skeyp_colors=''
 	for i in prefs.keyp_colors:
@@ -97,7 +97,7 @@ def loadsettings(cfgfile: str) -> None:
 	config.read( cfgfile )
 	section = 'options'
 	if config.has_option(section, 'midi_track_name'):
-		prefs.miditrackname = config.get(section, 'midi_track_name')
+		prefs.midi_track_name = config.get(section, 'midi_track_name')
 	if config.has_option(section, 'debug'):
 		prefs.debug = config.getboolean(section, 'debug')
 	if config.has_option(section, 'notes_overlap'):
@@ -135,11 +135,11 @@ def loadsettings(cfgfile: str) -> None:
 	if config.has_option(section, 'output_midi_tempo'):
 		prefs.tempo = config.getint(section, 'output_midi_tempo')
 	if config.has_option(section, 'frame_start'):
-		prefs.startframe = config.getint(section, 'frame_start')
+		prefs.start_frame = config.getint(section, 'frame_start')
 	if config.has_option(section, 'frame_end'):
-		prefs.endframe = config.getint(section, 'frame_end')
+		prefs.end_frame = config.getint(section, 'frame_end')
 	if config.has_option(section, 'blackkey_relative_position'):
-		prefs.blackkey_relative_position = config.getfloat(section, 'blackkey_relative_position')
+		prefs.black_key_relative_position = config.getfloat(section, 'blackkey_relative_position')
 
 	if config.has_option(section, 'keys_pos_count'):
 		prefs.keys_pos_cnt = config.getint(section, 'keys_pos_count')
@@ -169,7 +169,7 @@ def loadsettings(cfgfile: str) -> None:
 	if config.has_option(section, 'yoffset_blackkeys'):
 		prefs.yoffset_blackkeys = config.getint(section, 'yoffset_blackkeys')
 	if config.has_option(section, 'whitekey_width'):
-		prefs.whitekey_width = config.getint(section, 'whitekey_width')
+		prefs.white_key_width = config.getint(section, 'whitekey_width')
 
 	if config.has_option(section, 'keyp_colors'):
 		skeyp_colors = config.get(section, 'keyp_colors')

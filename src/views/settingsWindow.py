@@ -67,18 +67,18 @@ class SettingsWindow(GLWindow):
              {'name' : "  >]", 'hint' : 'End - hot key, go to last frame',
               'func' : self.app.scroll_to_end },
              {'name' : "R+", 'hint' : 'rotate the keys clockwise, hot key +',
-              'func' : self.app.rotate_cw },
+              'func' : self.app.rotate_clockwise },
              {'name' : "R-", 'hint' : 'rotate the keys counterclockwise, hot key -',
-              'func' : self.app.rotate_ccw }
+              'func' : self.app.rotate_counter_clockwise }
 
            ]
         #btnfuncs = [ None,  None, None, None,  None, None ]
         for i in range(len( navbtns_info )):
             self.root.appendChild( GLButton(200 + i * 32,230 ,32,20,0, [128,128,128],  navbtns_info[i]['name'] , navbtns_info[i]['func'], hint = navbtns_info[i]['hint']) )
 
-        self.root.appendChild( GLButton(200    , 295 ,140,20,0, [128,128,128], "Update count", self.app.change_cnt  , hint = "Change keys count" ) )
-        self.root.appendChild( GLButton(200+141, 295 ,70,20,0, [128,128,128], "V. align", self.app.valign  , hint = "vertical alignment of keys to the selected key" ) )
-        self.root.appendChild( GLButton(200+141+70, 295 ,70,20,0, [128,128,128], "H. align", self.app.halign  , hint = "horizontal alignment of keys to the selected key" ) )
+        self.root.appendChild( GLButton(200    , 295 ,140,20,0, [128,128,128], "Update count", self.app.change_key_count  , hint = "Change keys count" ) )
+        self.root.appendChild( GLButton(200+141, 295 ,70,20,0, [128,128,128], "V. align", self.app.btndown_vertical_align_keys  , hint = "vertical alignment of keys to the selected key" ) )
+        self.root.appendChild( GLButton(200+141+70, 295 ,70,20,0, [128,128,128], "H. align", self.app.btndown_halign_align_keys  , hint = "horizontal alignment of keys to the selected key" ) )
 
 
 
@@ -99,7 +99,7 @@ class SettingsWindow(GLWindow):
         self.midi_format_slider.round=0
         self.root.appendChild(self.midi_format_slider)
 
-        self.black_key_relative_pos_slider = GLSpinBox(10,215, 81,18, 0,1000,self.app.prefs.blackkey_relative_position * 1000, update_func=self.app.update_blackkey_relative_position, label="Black key relative pos")
+        self.black_key_relative_pos_slider = GLSpinBox(10,215, 81,18, 0,1000,self.app.prefs.black_key_relative_position * 1000, update_func=self.app.update_black_key_relative_position, label="Black key relative pos")
         self.black_key_relative_pos_slider.round=0
         self.root.appendChild(self.black_key_relative_pos_slider)
 
@@ -107,6 +107,6 @@ class SettingsWindow(GLWindow):
         self.notes_time_delta_slider.round=0
         self.root.appendChild(self.notes_time_delta_slider)
 
-        self.key_count_slider = GLSpinBox(10,295, 81,18, 12,144,self.app.prefs.keys_pos_cnt, update_func=self.app.update_keys_pos_cnt, label="Keys count")
+        self.key_count_slider = GLSpinBox(10,295, 81,18, 12,144,self.app.prefs.keys_pos_cnt, update_func=self.app.update_keys_pos_count, label="Keys count")
         self.key_count_slider.round=0
         self.root.appendChild(self.key_count_slider)

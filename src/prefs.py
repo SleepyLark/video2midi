@@ -1,7 +1,7 @@
 
 class prefs:
 	debug = 0
-	miditrackname='Sample Track'
+	midi_track_name='Sample Track'
 	midi_file_format = 1
 	notes_overlap = False
 
@@ -16,10 +16,10 @@ class prefs:
 
 	octave = 3
 	tempo = 120
-	startframe = 1
-	endframe = 1
+	start_frame = 1
+	end_frame = 1
 
-	blackkey_relative_position = 0.4
+	black_key_relative_position = 0.4
 
 	keyp_spark_y_pos = -110
 	use_sparks= False
@@ -34,7 +34,7 @@ class prefs:
 	xoffset_whitekeys = 60
 	yoffset_whitekeys = 673
 	yoffset_blackkeys = -30
-	whitekey_width=24.6
+	white_key_width=24.6
 
 	keyp_colors_alternate = []
 	keyp_colors_alternate_sensitivity = []
